@@ -6,7 +6,7 @@ import {
   solidity,
 } from "ethereum-waffle";
 import StakePoolContract from "../artifacts/contracts/StakingPool.sol/StakingPool.json";
-import { StakePool } from "../src/types";
+import { StakingPool } from "../src/types";
 import { Wallet, utils, BigNumber } from "ethers";
 
 use(solidity);
@@ -39,7 +39,7 @@ describe("Staking Pool", function () {
       StakePoolContract,
       [owner.address, start, end, ratioInt, hardCap, contributionLimit],
       { value: rewards }
-    )) as StakePool;
+    )) as StakingPool;
 
     // travel to staking event start
     await timeTravel(provider, 10);
