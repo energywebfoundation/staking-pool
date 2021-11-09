@@ -46,6 +46,7 @@ contract StakingPool {
         start = _start;
         end = _end;
         ratio = _ratio;
+        hardCap = _hardCap;
         contributionLimit = _contributionLimit;
 
         // check if deposit is at least the max rewards
@@ -54,13 +55,15 @@ contract StakingPool {
 
     function stake() public payable {
         // check role with claimManager
-        // check start and end times
-        // consider setting minimal
-        // implement hardcap and send back reminder
+        require(block.timestamp >= start, "Staking pool not yet started");
+        require(block.timestamp <= end, "Staking pool already expired");
+
         require(
             stakes[msg.sender].stake + msg.value <= contributionLimit,
-            "Stake above contribution limit"
+            "Stake greater than contribution limit"
         );
+
+        require(hardCap - totalStaked >= msg.value, "Staking pool is full");
 
         (, uint256 compounded) = total();
 
@@ -79,6 +82,8 @@ contract StakingPool {
     //allow specifing the value
     function unstakeAll() public {
         (, uint256 payout) = total();
+
+        require(payout > 0, "No stake available");
 
         totalStaked -= stakes[msg.sender].stake;
         delete stakes[msg.sender];
