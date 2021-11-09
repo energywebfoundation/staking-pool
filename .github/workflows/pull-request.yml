@@ -28,7 +28,7 @@ jobs:
         node-version: '14'
 
     - name: Install application
-      run: npm install
+      run: npm ci
 
     - name: Compile application
       run: npm run compile
