@@ -14,19 +14,18 @@
     "@cucumber/cucumber": "^7.3.1",
     "@nomiclabs/hardhat-ethers": "^2.0.2",
     "@nomiclabs/hardhat-waffle": "^2.0.1",
-    "@openzeppelin/contracts": "^4.2.0",
-    "@typechain/ethers-v5": "^7.0.1",
-    "@typechain/hardhat": "^2.3.0",
-    "@types/chai": "^4.2.21",
+    "@typechain/ethers-v5": "^7.2.0",
+    "@typechain/hardhat": "^2.3.1",
+    "@types/chai": "^4.2.22",
     "@types/cucumber": "^7.0.0",
     "@types/mocha": "^9.0.0",
-    "@types/node": "^16.6.1",
+    "@types/node": "^16.11.7",
     "chai": "^4.3.4",
     "ethereum-waffle": "^3.4.0",
-    "ethers": "^5.4.4",
-    "hardhat": "^2.6.0",
-    "ts-node": "^10.2.0",
-    "typechain": "^5.1.2",
-    "typescript": "^4.3.5"
+    "ethers": "^5.5.1",
+    "hardhat": "^2.6.8",
+    "ts-node": "^10.4.0",
+    "typechain": "^5.2.0",
+    "typescript": "^4.4.4"
   }
 }
