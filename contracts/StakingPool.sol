@@ -101,8 +101,13 @@ contract StakingPool {
             return (0, 0);
         }
 
-        // should stop compounding after end
-        uint256 period = block.timestamp - senderStake.time;
+        uint256 compoundEnd = block.timestamp;
+
+        if (block.timestamp > end) {
+            compoundEnd = end;
+        }
+
+        uint256 period = compoundEnd - senderStake.time;
         uint256 periods = period / 1 hours;
 
         uint256 compounded = compound(senderStake.compounded, ratio, periods);
