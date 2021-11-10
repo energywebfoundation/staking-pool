@@ -70,8 +70,8 @@ describe("Staking Pool", function () {
         defaultFixture
       );
 
-      expect(
-        await asPatron1.stake({
+      await expect(
+        asPatron1.stake({
           value: oneEWT,
         })
       )
@@ -79,7 +79,9 @@ describe("Staking Pool", function () {
         .withArgs(
           patron1.address,
           oneEWT,
-          (await provider.getBlock("latest")).timestamp
+          (
+            await provider.getBlock("latest")
+          ).timestamp
         );
 
       const [stake, compounded] = await asPatron1.total();
@@ -248,25 +250,22 @@ describe("Staking Pool", function () {
   });
 
   it(`maximum compound precision error should not result in error greater than 1 cent`, async function () {
-    const { asPatron1, provider, duration } = await loadFixture(defaultFixture);
+    const { stakingPool, duration } = await loadFixture(defaultFixture);
 
     const oneCent = utils.parseUnits("0.001", "ether");
 
     const patronStake = 50000;
     const patronStakeWei = utils.parseUnits(patronStake.toString(), "ether");
 
-    await asPatron1.stake({
-      value: patronStakeWei,
-    });
-
     const periods = duration / 3600;
 
+    const compounded = await stakingPool.compound(
+      patronStakeWei,
+      ratioInt,
+      periods
+    );
+
     const expectedCompounded = patronStake * Math.pow(1 + ratio, periods);
-
-    await timeTravel(provider, duration);
-
-    const [, compounded] = await asPatron1.total();
-
     const expected = utils.parseUnits(expectedCompounded.toString(), 18);
     const diff = compounded.sub(expected).abs().toNumber();
 
