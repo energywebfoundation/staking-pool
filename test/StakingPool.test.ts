@@ -70,19 +70,17 @@ describe("Staking Pool", function () {
         defaultFixture
       );
 
-      await expect(
-        asPatron1.stake({
-          value: oneEWT,
-        })
-      )
+      const tx = await asPatron1.stake({
+        value: oneEWT,
+      });
+
+      const receipt = await tx.wait();
+
+      const { timestamp } = await provider.getBlock(receipt.blockNumber);
+
+      await expect(tx)
         .to.emit(stakingPool, "StakeAdded")
-        .withArgs(
-          patron1.address,
-          oneEWT,
-          (
-            await provider.getBlock("latest")
-          ).timestamp
-        );
+        .withArgs(patron1.address, oneEWT, timestamp);
 
       const [stake, compounded] = await asPatron1.total();
 
