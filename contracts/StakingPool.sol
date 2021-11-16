@@ -37,7 +37,7 @@ contract StakingPool {
             _start >= block.timestamp,
             "Start date should be at least current block timestamp"
         );
-        require(_end - _start > 1 days, "Duration should be at least 1 day");
+        require(_end - _start >= 1 days, "Duration should be at least 1 day");
         require(msg.value > 0);
 
         //check if appropraite role

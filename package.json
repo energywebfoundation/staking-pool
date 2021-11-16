@@ -17,7 +17,8 @@
     "build": "npm run compile && bili && copyfiles artifacts/contracts/**/*.json -u 1 dist",
     "test": "hardhat test --show-stack-traces",
     "compile": "hardhat compile",
-    "cuke": "hardhat compile && tsc && cucumber-js"
+    "cuke": "hardhat compile && tsc && cucumber-js",
+    "deploy:dev": "concurrently \"hardhat node\" \"hardhat run scripts/deploy.js\""
   },
   "author": "Piotr Kosiński, Kevin Nzeng, Krzysztof Szostak",
   "license": "MIT",
@@ -47,7 +48,8 @@
     "rollup-plugin-typescript2": "^0.30.0",
     "ts-node": "^10.4.0",
     "typechain": "^5.2.0",
-    "typescript": "^4.4.4"
+    "typescript": "^4.4.4",
+    "concurrently": "6.4.0"
   },
   "release": {
     "branches": [

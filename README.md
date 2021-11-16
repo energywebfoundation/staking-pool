@@ -13,4 +13,8 @@ In order to build after a successful `clone`:
 
 * npm run test
 
+## Local deployment
+
+* npm run deploy:dev
+
 More information to come...
