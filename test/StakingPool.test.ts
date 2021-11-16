@@ -91,9 +91,11 @@ describe("Staking Pool", function () {
     it(`can stake funds multiple times`, async function () {
       const { asPatron1 } = await loadFixture(defaultFixture);
 
-      await asPatron1.stake({
+      const receipt = await asPatron1.stake({
         value: oneEWT,
       });
+
+      await receipt.wait();
 
       await asPatron1.stake({
         value: oneEWT,

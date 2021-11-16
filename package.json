@@ -10,7 +10,7 @@
   "scripts": {
     "prebuild": "rimraf dist ethers && hardhat clean",
     "build": "npm run compile && bili && copyfiles artifacts/contracts/**/*.json -u 1 dist",
-    "test": "hardhat test",
+    "test": "hardhat test --show-stack-traces",
     "compile": "hardhat compile",
     "cuke": "hardhat compile && tsc && cucumber-js"
   },
