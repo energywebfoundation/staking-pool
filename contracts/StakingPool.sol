@@ -1,5 +1,5 @@
 //SPDX-License-Identifier: MIT
-pragma solidity 0.8.6;
+pragma solidity ^0.8.6;
 
 import "./libs/ABDKMath64x64.sol";
 
@@ -16,7 +16,7 @@ contract StakingPool {
     uint256 public totalStaked;
 
     struct Stake {
-        uint256 stake;
+        uint256 deposit;
         uint256 compounded;
         uint256 time;
     }
@@ -24,10 +24,13 @@ contract StakingPool {
     event StakeAdded(address indexed sender, uint256 amount, uint256 time);
     event StakeWithdrawn(address indexed sender, uint256 amount);
     event StakingPoolInitialized(uint256 funded);
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(
+        address indexed previousOwner,
+        address indexed newOwner
+    );
 
     mapping(address => Stake) public stakes;
-    modifier onlyOwner(){
+    modifier onlyOwner() {
         require(msg.sender == owner, "OnlyOwner: Not authorized");
         _;
     }
@@ -61,7 +64,7 @@ contract StakingPool {
         ratio = _ratio;
         hardCap = _hardCap;
         contributionLimit = _contributionLimit;
-        
+
         emit StakingPoolInitialized(msg.value);
     }
 
@@ -79,7 +82,7 @@ contract StakingPool {
         require(block.timestamp <= end, "Staking pool already expired");
 
         require(
-            stakes[msg.sender].stake + msg.value <= contributionLimit,
+            stakes[msg.sender].deposit + msg.value <= contributionLimit,
             "Stake greater than contribution limit"
         );
 
@@ -88,7 +91,7 @@ contract StakingPool {
         (, uint256 compounded) = total();
 
         // track user stake
-        stakes[msg.sender].stake += msg.value;
+        stakes[msg.sender].deposit += msg.value;
         // store compounded value
         stakes[msg.sender].compounded = compounded + msg.value;
         // update compunding time
@@ -99,17 +102,41 @@ contract StakingPool {
         emit StakeAdded(msg.sender, msg.value, block.timestamp);
     }
 
+    function unstake(uint256 value) public {
+        (uint256 deposit, uint256 compounded) = total();
+
+        require(compounded > 0, "No funds available");
+
+        require(
+            compounded >= value,
+            "Requested value above the compounded funds"
+        );
+
+        uint256 depositComponent = deposit;
+        if (value < deposit) {
+            depositComponent = value;
+        }
+
+        if (value == compounded) {
+            delete stakes[msg.sender];
+        } else {
+            stakes[msg.sender].deposit -= depositComponent;
+            stakes[msg.sender].compounded = compounded - value;
+            stakes[msg.sender].time = block.timestamp;
+        }
+
+        totalStaked -= depositComponent;
+
+        payable(msg.sender).transfer(value);
+
+        emit StakeWithdrawn(msg.sender, value);
+    }
+
     //allow specifing the value
     function unstakeAll() public {
-        (, uint256 payout) = total();
+        (, uint256 compounded) = total();
 
-        require(payout > 0, "No stake available");
-
-        totalStaked -= stakes[msg.sender].stake;
-        delete stakes[msg.sender];
-        payable(msg.sender).transfer(payout);
-
-        emit StakeWithdrawn(msg.sender, payout);
+        unstake(compounded);
     }
 
     function total() public view returns (uint256, uint256) {
@@ -131,7 +158,7 @@ contract StakingPool {
 
         uint256 compounded = compound(senderStake.compounded, ratio, periods);
 
-        return (senderStake.stake, compounded);
+        return (senderStake.deposit, compounded);
     }
 
     function compound(

@@ -23,7 +23,7 @@
     "prepare": "is-ci || husky install",
     "lint": "npx eslint . --ext .ts --fix",
     "hardhat:coverage": "npx hardhat coverage",
-    "hardhat:lint": "npx solhint 'contracts/**/*.sol' --fix --max-warnings 100"
+    "hardhat:lint": "npx hardhat check"
   },
   "author": "Piotr Kosiński, Kevin Nzeng, Krzysztof Szostak",
   "license": "MIT",

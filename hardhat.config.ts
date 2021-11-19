@@ -6,9 +6,9 @@ import "@nomiclabs/hardhat-solhint";
 require("solidity-coverage");
 import { defaultAccounts } from "@ethereum-waffle/provider";
 
-dotenv.config()
+dotenv.config();
 
-const deployer_privateKey = process.env.DEPLOYER_PRIV_KEY || defaultAccounts[0].secretKey
+const deployer_privateKey = process.env.DEPLOYER_PRIV_KEY || defaultAccounts[0].secretKey;
 
 // noinspection JSValidateJSDoc
 /**

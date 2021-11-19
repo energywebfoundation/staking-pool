@@ -12,8 +12,6 @@ describe("Staking Pool", function () {
   const hardCap = oneEWT.mul(5000000);
   const contributionLimit = oneEWT.mul(50000);
 
-  const rewards = oneEWT.mul(11);
-
   const ratio = 0.0000225;
   const ratioInt = utils.parseUnits(ratio.toString(), 18); // ratio as 18 digit number
 
@@ -27,17 +25,14 @@ describe("Staking Pool", function () {
     start: number,
     [owner, patron1, patron2]: Wallet[],
     provider: MockProvider,
-    initializePool: boolean = true,
+    initializePool = true,
   ) {
     const duration = 3600 * 24 * 30;
     const end = start + duration;
 
-    const stakingPool = (await deployContract(
-      owner,
-      StakePoolContract
-    )) as StakingPool;
+    const stakingPool = (await deployContract(owner, StakePoolContract)) as StakingPool;
 
-    if (initializePool){
+    if (initializePool) {
       const asOwner = stakingPool.connect(owner);
       const tx = await asOwner.init(
         owner.address, //ToDo adapt with claimManager address
@@ -47,11 +42,10 @@ describe("Staking Pool", function () {
         hardCap,
         contributionLimit,
         {
-        value: oneEWT,
-      });
-      await expect(tx).to
-                      .emit(stakingPool, "StakingPoolInitialized")
-                            .withArgs(oneEWT);
+          value: oneEWT,
+        },
+      );
+      await expect(tx).to.emit(stakingPool, "StakingPoolInitialized").withArgs(oneEWT);
     }
 
     // travel to staking event start
@@ -87,22 +81,17 @@ describe("Staking Pool", function () {
     return fixture(hardCap, start, wallets, provider, false);
   }
 
-  it("Ownership can't be transferred to current owner", async function(){
+  it("Ownership can't be transferred to current owner", async function () {
     const { owner, asOwner } = await loadFixture(defaultFixture);
-    await expect(
-      asOwner.changeOwner(owner.address)
-      ).to.be.revertedWith("changeOwner: already owner");
+    await expect(asOwner.changeOwner(owner.address)).to.be.revertedWith("changeOwner: already owner");
   });
 
-
-  it("Ownership can't be transferred by non owner", async function(){
+  it("Ownership can't be transferred by non owner", async function () {
     const { asPatron1, patron1 } = await loadFixture(defaultFixture);
-    await expect(
-      asPatron1.changeOwner(patron1.address)
-    ).to.be.revertedWith("OnlyOwner: Not authorized");
+    await expect(asPatron1.changeOwner(patron1.address)).to.be.revertedWith("OnlyOwner: Not authorized");
   });
 
-  it("Ownership is correctly transferred", async function(){
+  it("Ownership is correctly transferred", async function () {
     const { patron1, asOwner, stakingPool } = await loadFixture(defaultFixture);
 
     const tx = await asOwner.changeOwner(patron1.address);
@@ -111,9 +100,9 @@ describe("Staking Pool", function () {
   });
 
   describe("Staking", async () => {
-    it("should revert if staking pool is not initialized", async function(){
+    it("should revert if staking pool is not initialized", async function () {
       const { asPatron1 } = await loadFixture(failureInitFixture);
-  
+
       await expect(
         asPatron1.stake({
           value: oneEWT,
@@ -128,35 +117,32 @@ describe("Staking Pool", function () {
         value: oneEWT,
       });
 
-      const receipt = await tx.wait();
-
-      const { timestamp } = await provider.getBlock(receipt.blockNumber);
+      const { blockNumber } = await tx.wait();
+      const { timestamp } = await provider.getBlock(blockNumber);
 
       await expect(tx).to.emit(stakingPool, "StakeAdded").withArgs(patron1.address, oneEWT, timestamp);
 
-      const [stake, compounded] = await asPatron1.total();
+      const [deposit, compounded] = await asPatron1.total();
 
-      expect(stake).to.be.equal(compounded);
-      expect(stake).to.be.equal(oneEWT);
+      expect(deposit).to.be.equal(compounded);
+      expect(deposit).to.be.equal(oneEWT);
     });
 
     it("can stake funds multiple times", async function () {
       const { asPatron1 } = await loadFixture(defaultFixture);
 
-      const receipt = await asPatron1.stake({
+      await asPatron1.stake({
         value: oneEWT,
       });
-
-      await receipt.wait();
 
       await asPatron1.stake({
         value: oneEWT,
       });
 
-      const [stake, compounded] = await asPatron1.total();
+      const [deposit, compounded] = await asPatron1.total();
 
-      expect(stake).to.be.equal(compounded);
-      expect(stake).to.be.equal(oneEWT.mul(2));
+      expect(deposit).to.be.equal(compounded);
+      expect(deposit).to.be.equal(oneEWT.mul(2));
     });
 
     it("should increase the balance of the staking pool", async function () {
@@ -235,15 +221,15 @@ describe("Staking Pool", function () {
 
       await timeTravel(provider, duration + 1);
 
-      const [stake, compounded] = await asPatron1.total();
+      const [deposit, compounded] = await asPatron1.total();
 
-      expect(compounded.gt(stake)).to.be.true;
+      expect(compounded.gt(deposit)).to.be.true;
 
       await timeTravel(provider, duration + 1);
 
       const [stakeAfterExpiry, compoundedAfterExpiry] = await asPatron1.total();
 
-      expect(stakeAfterExpiry).to.be.equal(stake);
+      expect(stakeAfterExpiry).to.be.equal(deposit);
       expect(compoundedAfterExpiry).to.be.equal(compounded);
     });
   });
@@ -258,9 +244,9 @@ describe("Staking Pool", function () {
 
       await expect(await asPatron1.unstakeAll()).to.changeEtherBalance(patron1, oneEWT);
 
-      const [stake, compounded] = await asPatron1.total();
+      const [deposit, compounded] = await asPatron1.total();
 
-      expect(stake).to.be.equal(BigNumber.from(0));
+      expect(deposit).to.be.equal(BigNumber.from(0));
       expect(compounded).to.be.equal(BigNumber.from(0));
     });
 
@@ -281,7 +267,48 @@ describe("Staking Pool", function () {
         value: oneEWT,
       });
 
-      await expect(asPatron2.unstakeAll()).to.be.revertedWith("No stake available");
+      await expect(asPatron2.unstakeAll()).to.be.revertedWith("No funds available");
+    });
+
+    it("should allow partial withdrawal up to compounded value", async function () {
+      const { asPatron1, provider, duration } = await loadFixture(defaultFixture);
+
+      const initialStake = oneEWT;
+
+      await asPatron1.stake({
+        value: initialStake,
+      });
+
+      await timeTravel(provider, duration / 2);
+
+      let [deposit, compounded] = await asPatron1.total();
+
+      const initialCompounded = compounded;
+
+      expect(compounded.gt(deposit)).to.be.true;
+
+      const withdrawalValue = initialStake.div(2);
+
+      await asPatron1.unstake(withdrawalValue);
+
+      [deposit, compounded] = await asPatron1.total();
+
+      expect(deposit).to.be.equal(initialStake.sub(withdrawalValue));
+      expect(compounded).to.be.equal(initialCompounded.sub(withdrawalValue));
+
+      await asPatron1.unstake(withdrawalValue);
+
+      [deposit, compounded] = await asPatron1.total();
+
+      expect(deposit).to.be.equal(BigNumber.from(0));
+      expect(compounded.gt(0)).to.be.true;
+
+      await asPatron1.unstake(compounded);
+
+      [deposit, compounded] = await asPatron1.total();
+
+      expect(deposit).to.be.equal(BigNumber.from(0));
+      expect(compounded).to.be.equal(BigNumber.from(0));
     });
   });
 

@@ -37,7 +37,7 @@ jobs:
       run: npm run lint
 
     - name: Run SOL lint
-      run: npm run hardhat:lint || true
+      run: npm run hardhat:lint
 
     - name: Compile application
       run: npm run build
