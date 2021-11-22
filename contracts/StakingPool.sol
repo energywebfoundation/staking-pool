@@ -8,17 +8,26 @@ contract StakingPool {
 
     address public owner;
     address public claimManager;
+
     uint256 public start;
     uint256 public end;
+
     uint256 public ratio;
     uint256 public hardCap;
     uint256 public contributionLimit;
+
     uint256 public totalStaked;
+
+    uint256 private remainingRewards;
+    uint256 private futureRewards;
+
+    bool public sweeped;
 
     struct Stake {
         uint256 deposit;
         uint256 compounded;
         uint256 time;
+        uint256 futureReward;
     }
 
     event StakeAdded(address indexed sender, uint256 amount, uint256 time);
@@ -30,8 +39,22 @@ contract StakingPool {
     );
 
     mapping(address => Stake) public stakes;
+
     modifier onlyOwner() {
         require(msg.sender == owner, "OnlyOwner: Not authorized");
+        _;
+    }
+
+    modifier belowContributionLimit() {
+        require(
+            stakes[msg.sender].deposit + msg.value <= contributionLimit,
+            "Stake greater than contribution limit"
+        );
+        _;
+    }
+
+    modifier initialized() {
+        require(start != 0, "Staking Pool not initialized");
         _;
     }
 
@@ -65,6 +88,8 @@ contract StakingPool {
         hardCap = _hardCap;
         contributionLimit = _contributionLimit;
 
+        remainingRewards = msg.value;
+
         emit StakingPoolInitialized(msg.value);
     }
 
@@ -75,34 +100,27 @@ contract StakingPool {
         emit OwnershipTransferred(oldOwner, _newOwner);
     }
 
-    function stake() public payable {
+    function stake() public payable initialized belowContributionLimit {
         // check role with claimManager
-        require(start != 0, "Staking Pool not initialized");
         require(block.timestamp >= start, "Staking pool not yet started");
         require(block.timestamp <= end, "Staking pool already expired");
-
-        require(
-            stakes[msg.sender].deposit + msg.value <= contributionLimit,
-            "Stake greater than contribution limit"
-        );
 
         require(hardCap - totalStaked >= msg.value, "Staking pool is full");
 
         (, uint256 compounded) = total();
 
-        // track user stake
-        stakes[msg.sender].deposit += msg.value;
-        // store compounded value
-        stakes[msg.sender].compounded = compounded + msg.value;
-        // update compunding time
-        stakes[msg.sender].time = block.timestamp;
+        updateStake(
+            stakes[msg.sender].deposit + msg.value,
+            compounded + msg.value
+        );
+        accountFutureReward();
 
         totalStaked += msg.value;
 
         emit StakeAdded(msg.sender, msg.value, block.timestamp);
     }
 
-    function unstake(uint256 value) public {
+    function unstake(uint256 value) public initialized {
         (uint256 deposit, uint256 compounded) = total();
 
         require(compounded > 0, "No funds available");
@@ -112,19 +130,21 @@ contract StakingPool {
             "Requested value above the compounded funds"
         );
 
-        uint256 depositComponent = deposit;
-        if (value < deposit) {
-            depositComponent = value;
-        }
+        uint256 depositComponent = value <= deposit ? value : deposit;
+        uint256 rewardComponent = value > deposit ? value - deposit : 0;
 
         if (value == compounded) {
             delete stakes[msg.sender];
         } else {
-            stakes[msg.sender].deposit -= depositComponent;
-            stakes[msg.sender].compounded = compounded - value;
-            stakes[msg.sender].time = block.timestamp;
+            updateStake(
+                stakes[msg.sender].deposit - depositComponent,
+                compounded - value
+            );
+            accountFutureReward();
         }
 
+        futureRewards -= rewardComponent;
+        remainingRewards -= rewardComponent;
         totalStaked -= depositComponent;
 
         payable(msg.sender).transfer(value);
@@ -133,10 +153,42 @@ contract StakingPool {
     }
 
     //allow specifing the value
-    function unstakeAll() public {
+    function unstakeAll() public initialized {
         (, uint256 compounded) = total();
 
         unstake(compounded);
+    }
+
+    function sweep() public initialized onlyOwner {
+        require(!sweeped, "Already sweeped");
+        require(block.timestamp >= end, "Cannot sweep before expiry");
+
+        uint256 payout = remainingRewards - futureRewards;
+
+        sweeped = true;
+
+        payable(msg.sender).transfer(payout);
+    }
+
+    function calculateFutureReward() private view returns (uint256) {
+        return
+            compound(stakes[msg.sender].compounded, block.timestamp, end) -
+            stakes[msg.sender].deposit;
+    }
+
+    function accountFutureReward() private {
+        uint256 futureReward = calculateFutureReward();
+
+        futureRewards -= stakes[msg.sender].futureReward;
+        futureRewards += futureReward;
+
+        stakes[msg.sender].futureReward = futureReward;
+    }
+
+    function updateStake(uint256 deposit, uint256 compounded) private {
+        stakes[msg.sender].deposit = deposit;
+        stakes[msg.sender].compounded = compounded;
+        stakes[msg.sender].time = block.timestamp;
     }
 
     function total() public view returns (uint256, uint256) {
@@ -147,31 +199,30 @@ contract StakingPool {
             return (0, 0);
         }
 
-        uint256 compoundEnd = block.timestamp;
+        uint256 compoundEnd = block.timestamp > end ? end : block.timestamp;
 
-        if (block.timestamp > end) {
-            compoundEnd = end;
-        }
-
-        uint256 period = compoundEnd - senderStake.time;
-        uint256 periods = period / 1 hours;
-
-        uint256 compounded = compound(senderStake.compounded, ratio, periods);
+        uint256 compounded = compound(
+            senderStake.compounded,
+            senderStake.time,
+            compoundEnd
+        );
 
         return (senderStake.deposit, compounded);
     }
 
     function compound(
         uint256 principal,
-        uint256 _ratio,
-        uint256 n
-    ) public pure returns (uint256) {
+        uint256 compoundStart,
+        uint256 compoundEnd
+    ) public view returns (uint256) {
+        uint256 n = (compoundEnd - compoundStart) / 1 hours;
+
         return
             ABDKMath64x64.mulu(
                 ABDKMath64x64.pow(
                     ABDKMath64x64.add(
                         ABDKMath64x64.fromUInt(1),
-                        ABDKMath64x64.divu(_ratio, 10**18)
+                        ABDKMath64x64.divu(ratio, 10**18)
                     ),
                     n
                 ),

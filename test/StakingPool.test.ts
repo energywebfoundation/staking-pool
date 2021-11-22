@@ -20,6 +20,11 @@ describe("Staking Pool", function () {
     await provider.send("evm_mine", []);
   };
 
+  async function stakeAndTravel(stakingPool: StakingPool, value: BigNumber, seconds: number, provider: MockProvider) {
+    await stakingPool.stake({ value });
+    await timeTravel(provider, seconds);
+  }
+
   async function fixture(
     hardCap: BigNumber,
     start: number,
@@ -29,6 +34,7 @@ describe("Staking Pool", function () {
   ) {
     const duration = 3600 * 24 * 30;
     const end = start + duration;
+    const rewards = oneEWT;
 
     const stakingPool = (await deployContract(owner, StakePoolContract)) as StakingPool;
 
@@ -42,7 +48,7 @@ describe("Staking Pool", function () {
         hardCap,
         contributionLimit,
         {
-          value: oneEWT,
+          value: rewards,
         },
       );
       await expect(tx).to.emit(stakingPool, "StakingPoolInitialized").withArgs(oneEWT);
@@ -64,6 +70,7 @@ describe("Staking Pool", function () {
       start,
       end,
       hardCap,
+      rewards,
     };
   }
 
@@ -79,6 +86,18 @@ describe("Staking Pool", function () {
     const start = timestamp + 10;
 
     return fixture(hardCap, start, wallets, provider, false);
+  }
+
+  async function initialStakeAndTravelToExpiryFixture(wallets: Wallet[], provider: MockProvider) {
+    const { timestamp } = await provider.getBlock("latest");
+    const start = timestamp + 10;
+
+    const setup = await fixture(hardCap, start, wallets, provider);
+    const { asPatron1, duration } = setup;
+
+    await stakeAndTravel(asPatron1, oneEWT, duration, setup.provider);
+
+    return setup;
   }
 
   it("Ownership can't be transferred to current owner", async function () {
@@ -215,15 +234,9 @@ describe("Staking Pool", function () {
     it("should not compound stake after reaching expiry date", async function () {
       const { asPatron1, duration, provider } = await loadFixture(defaultFixture);
 
-      await asPatron1.stake({
-        value: oneEWT,
-      });
-
-      await timeTravel(provider, duration + 1);
+      await stakeAndTravel(asPatron1, oneEWT, duration + 1, provider);
 
       const [deposit, compounded] = await asPatron1.total();
-
-      expect(compounded.gt(deposit)).to.be.true;
 
       await timeTravel(provider, duration + 1);
 
@@ -275,11 +288,7 @@ describe("Staking Pool", function () {
 
       const initialStake = oneEWT;
 
-      await asPatron1.stake({
-        value: initialStake,
-      });
-
-      await timeTravel(provider, duration / 2);
+      await stakeAndTravel(asPatron1, initialStake, duration / 2, provider);
 
       let [deposit, compounded] = await asPatron1.total();
 
@@ -312,8 +321,112 @@ describe("Staking Pool", function () {
     });
   });
 
+  describe("Sweeping", async () => {
+    async function quote(stakingPools: StakingPool[]) {
+      let deposits = BigNumber.from(0);
+      let rewards = BigNumber.from(0);
+
+      for (const stakingPool of stakingPools) {
+        const [deposit, compounded] = await stakingPool.total();
+        const reward = compounded.sub(deposit);
+
+        deposits = deposits.add(deposit);
+        rewards = rewards.add(reward);
+      }
+
+      return { deposits, rewards };
+    }
+
+    async function calculateExpectedSweep(stakingPools: StakingPool[], initialRewards: BigNumber) {
+      const { rewards } = await quote(stakingPools);
+
+      return initialRewards.sub(rewards);
+    }
+
+    async function assertTransferAndBalance(
+      initialRewards: BigNumber,
+      patrons: StakingPool[],
+      asOwner: StakingPool,
+      owner: Wallet,
+      provider: MockProvider,
+      expectedSweep?: BigNumber,
+      expectedBalance?: BigNumber,
+    ) {
+      const { deposits, rewards } = await quote(patrons);
+
+      const toSweep = expectedSweep ?? (await calculateExpectedSweep(patrons, initialRewards));
+
+      await expect(await asOwner.sweep()).to.changeEtherBalance(owner, toSweep);
+
+      expect(await provider.getBalance(asOwner.address)).to.be.equal(expectedBalance ?? deposits.add(rewards));
+    }
+
+    it("should not allow to sweep before expiry", async function () {
+      const { asOwner } = await loadFixture(defaultFixture);
+
+      await expect(asOwner.sweep()).to.be.revertedWith("Cannot sweep before expiry");
+    });
+
+    it("should allow to sweep only once", async function () {
+      const { asOwner } = await loadFixture(initialStakeAndTravelToExpiryFixture);
+
+      await asOwner.sweep();
+
+      await expect(asOwner.sweep()).to.be.revertedWith("Already sweeped");
+    });
+
+    it("should sweep remaining rewards when patron staked", async function () {
+      const { owner, asPatron1, asOwner, provider, rewards } = await loadFixture(initialStakeAndTravelToExpiryFixture);
+
+      await assertTransferAndBalance(rewards, [asPatron1], asOwner, owner, provider);
+    });
+
+    it("should sweep remaining rewards when patron staked multiple times", async function () {
+      const { owner, asPatron1, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
+
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
+      await stakeAndTravel(asPatron1, oneEWT, duration, provider);
+
+      await assertTransferAndBalance(rewards, [asPatron1], asOwner, owner, provider);
+    });
+
+    it("should sweep remaining rewards when patron staked multiple times from multiple patrons", async function () {
+      const { owner, asPatron1, asPatron2, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
+
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
+      await stakeAndTravel(asPatron2, oneEWT, 0, provider);
+
+      await stakeAndTravel(asPatron1, oneEWT, duration, provider);
+
+      const expectedSweep = await calculateExpectedSweep([asPatron1, asPatron2], rewards);
+      await assertTransferAndBalance(rewards, [asPatron1, asPatron2], asOwner, owner, provider, expectedSweep);
+    });
+
+    it("should sweep remaining rewards when patron staked and withdrawn after expiry", async function () {
+      const { owner, asPatron1, asOwner, provider, rewards } = await loadFixture(initialStakeAndTravelToExpiryFixture);
+
+      const expectedSweep = await calculateExpectedSweep([asPatron1], rewards);
+
+      await asPatron1.unstakeAll();
+
+      await assertTransferAndBalance(rewards, [asPatron1], asOwner, owner, provider, expectedSweep, BigNumber.from(0));
+    });
+
+    it("should sweep remaining rewards when patron staked and withdrawn before expiry", async function () {
+      const { owner, asPatron1, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
+
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
+
+      await asPatron1.unstake(oneEWT);
+
+      await timeTravel(provider, duration);
+
+      await assertTransferAndBalance(rewards, [asPatron1], asOwner, owner, provider);
+    });
+  });
+
   it("maximum compound precision error should not result in error greater than 1 cent", async function () {
-    const { stakingPool, duration } = await loadFixture(defaultFixture);
+    const { stakingPool, start, end, duration } = await loadFixture(defaultFixture);
 
     const oneCent = utils.parseUnits("0.001", "ether");
 
@@ -322,7 +435,7 @@ describe("Staking Pool", function () {
 
     const periods = duration / 3600;
 
-    const compounded = await stakingPool.compound(patronStakeWei, ratioInt, periods);
+    const compounded = await stakingPool.compound(patronStakeWei, start, end);
 
     const expectedCompounded = patronStake * Math.pow(1 + ratio, periods);
     const expected = utils.parseUnits(expectedCompounded.toString(), 18);
