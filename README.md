@@ -19,7 +19,7 @@ Initialized - init() function executed
 
 Open - block.timestamp >= start
 
-Expired - block.timestamp <= end
+Expired - block.timestamp >= end
 
 Swept - sweep() function executed
 ```
