@@ -6,7 +6,7 @@ This repository contains the implementation of the staking pool with hourly comp
 
 ## Lifecycle
 
-Staking pool can be in one of the states during it's lifetime
+Staking pool can be in one of these states during it's lifetime :
 ```
 Deployed --> Initialized --> Open --> Expired --> Swept
 ``` 
