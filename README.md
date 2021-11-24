@@ -65,15 +65,16 @@ Since the funding requires maximum amount of rewards to be provided the sweeping
 
 `Sweep` can only be called by `owner` after reaching staking pool expiry, where compounding has stopped and thus total amount of rewards is fixed.
 
-As unnecessary funds we define the difference between maxFutureRewards and rewards at the staking pool expiry.
+We define unnecessary funds as the difference between `maxFutureRewards` and rewards at the staking pool expiry.
 
-```
-remainingRewards=maxFutureRewards-sum(withdrawnRewards)
+> 
+> remainingRewards = maxFutureRewards - sum(withdrawnRewards)
+> 
+> sweepAmount(t == end) = remainingRewards - sum(stakedRewards)
+> 
+> sweepAmount(t) = maxFutureRewards - sum(withdrawnRewards(t)) - sum(stakedRewards(t))
+> 
 
-sweepAmount(t=end)=remainingRewards-sum(stakedRewards)
-
-sweepAmount(t)=maxFutureRewards-sum(withdrawnRewards(t))-sum(stakedRewards(t))
-```
 
 
 ## Building
