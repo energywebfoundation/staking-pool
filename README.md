@@ -45,7 +45,7 @@ compounded: deposit+compounded rewards
 ratio:      hourly compounding ratio
 n:          amount of hourly intervals
 ```
-Power function used in the compounding equation comes from `ABDKMath64x64` solidity math library. 
+Power function used in the compounding equation comes from [ABDKMath64x64](https://github.com/energywebfoundation/staking-pool/blob/eeefbaf4063f3b0868c4ad0d45933e6cb36315c5/contracts/libs/ABDKMath64x64.sol#L16)solidity math library. 
 
 To keep the smart contract state minimal `Stake` struct in the `stakes` mapping keeps compounded value that is being updated on every additional stake and unstake function calls, in other words in any function that changes the `stake.deposit`.
 
