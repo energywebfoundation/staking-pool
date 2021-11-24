@@ -63,7 +63,7 @@ maxFutureRewards = hardCap - hardCap * compound(1+ratio)**((end-start)/1 hour)
 
 Since the funding requires maximum amount of rewards to be provided the sweeping functionality is required for staking pool owner to reclaim unnecessary funds. 
 
-`Sweep` can only be called my `owner` after reaching staking pool expiry, where compounding has stopped and thus total amount of rewards is fixed.
+`Sweep` can only be called by `owner` after reaching staking pool expiry, where compounding has stopped and thus total amount of rewards is fixed.
 
 As unnecessary funds we define the difference between maxFutureRewards and rewards at the staking pool expiry.
 
