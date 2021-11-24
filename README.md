@@ -47,7 +47,8 @@ n:          amount of hourly intervals
 ```
 Power function used in the compounding equation comes from [ABDKMath64x64](https://github.com/energywebfoundation/staking-pool/blob/eeefbaf4063f3b0868c4ad0d45933e6cb36315c5/contracts/libs/ABDKMath64x64.sol#L16)solidity math library. 
 
-To keep the smart contract state minimal `Stake` struct in the `stakes` mapping keeps compounded value that is being updated on every additional stake and unstake function calls, in other words in any function that changes the `stake.deposit`.
+To keep the smart contract state minimal, `Stake` struct in the `stakes` mapping keeps compounded value that is being updated on every additional stake and unstake function calls, in other words in any function that changes the `stake.deposit`.
+ > `mapping(address => Stake) public stakes;`
 
 ### Funding
 Our staking pool requires the owner to provide the funds to cover all potential rewards given `hardCap`, `ratio` and staking pool time dimension.
