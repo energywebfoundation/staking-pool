@@ -1,12 +1,9 @@
-const {
-  deployContract,
-  intializeContract,
-} = require("./utils/deployUtils");
+const { deployContract, initializeContract } = require("./utils/deployUtils");
 
 async function main() {
   const stakingPoolContract = await deployContract("StakingPool");
   if (stakingPoolContract) {
-   await intializeContract(stakingPoolContract);
+    await initializeContract(stakingPoolContract);
   }
 }
 
