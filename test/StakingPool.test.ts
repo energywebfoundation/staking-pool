@@ -136,6 +136,23 @@ describe("Staking Pool", function () {
     return setup;
   }
 
+  it("should revert when contribution limit is higher than hardCap", async function () {
+    const { asOwner, end, rewards, start, owner, claimManagerMocked, defaultRoleVersion } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
+      const { timestamp } = await provider.getBlock("latest");
+      const start = timestamp + 15;
+      const initializePool = false
+      
+      return fixture(hardCap, start, wallets, provider, initializePool);
+    });
+    const  wrongContributionLimit = hardCap.add(1);
+
+    await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
+
+    await expect(asOwner.init(start, end, ratioInt, hardCap, wrongContributionLimit , [patronRoleDef], {
+      value: rewards,
+    })).to.be.revertedWith("hardCap exceeded");
+  });
+
   it("should revert when init rewards are lower than max future rewards", async function () {
     const { owner, asOwner, start, end, hardCap, claimManagerMocked, defaultRoleVersion, rewards } = await loadFixture(
       uninitializedFixture,
@@ -236,15 +253,19 @@ describe("Staking Pool", function () {
     });
 
     it("should revert when staking pool reached the hard cap", async function () {
-      const hardCap = utils.parseUnits("2", "ether");
-      const { asPatron1, asPatron2 } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
+      const hardCap = contributionLimit;
+      const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
         const { timestamp } = await provider.getBlock("latest");
-        const start = timestamp + 10;
+        const start = timestamp + 11;
+        
         return fixture(hardCap, start, wallets, provider);
       });
 
+      await asOwner.init(start, end, ratioInt, hardCap, contributionLimit , [patronRoleDef], {
+          value: rewards,
+        });
       await asPatron1.stake({
-        value: oneEWT.mul(2),
+        value: contributionLimit,
       });
 
       await expect(

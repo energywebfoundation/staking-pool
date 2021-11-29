@@ -96,6 +96,7 @@ contract StakingPool {
 		);
 		// check if stake pool time is at least 1 day
 		require(_end - _start >= 1 days, "Duration should be at least 1 day");
+		require(_hardCap >= _contributionLimit, "hardCap exceeded");
 
 		uint256 maxFutureRewards = compound(
 			_hourlyRatio,
