@@ -1,3 +1,10 @@
+# [1.0.0-rc.10](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.9...v1.0.0-rc.10) (2021-11-29)
+
+
+### Features
+
+* rewards amount check during initialization ([#27](https://github.com/energywebfoundation/staking-pool/issues/27)) ([c29b6d0](https://github.com/energywebfoundation/staking-pool/commit/c29b6d053948322907c48d4ed90f86f70c350512))
+
 # [1.0.0-rc.9](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2021-11-26)
 
 
