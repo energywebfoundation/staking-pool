@@ -49,6 +49,7 @@ describe("Staking Pool", function () {
     [owner, patron1, patron2]: Wallet[],
     provider: MockProvider,
     initializePool = true,
+    travel = true,
   ) {
     const duration = 3600 * 24 * 30;
     const end = start + duration;
@@ -84,7 +85,10 @@ describe("Staking Pool", function () {
         await expect(tx).to.emit(stakingPool, "StakingPoolInitialized").withArgs(rewards, timestamp);
 
         // travel to staking event start
-        await timeTravel(provider, 10);
+        if (travel) {
+          const travelTo = start - timestamp;
+          await timeTravel(provider, travelTo);
+        }
       } catch (error) {
         console.log("Initialization Error: ");
         console.log(error);
@@ -240,7 +244,7 @@ describe("Staking Pool", function () {
       const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(
         async (wallets: Wallet[], provider: MockProvider) => {
           const { timestamp } = await provider.getBlock("latest");
-          const start = timestamp + 11;
+          const start = timestamp + 10;
 
           return fixture(hardCap, start, wallets, provider);
         },
@@ -276,7 +280,7 @@ describe("Staking Pool", function () {
       const { asPatron1 } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
         const { timestamp } = await provider.getBlock("latest");
         const start = timestamp + 100; //future
-        return fixture(hardCap, start, wallets, provider);
+        return fixture(hardCap, start, wallets, provider, true, false);
       });
 
       await expect(
