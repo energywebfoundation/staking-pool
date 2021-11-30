@@ -19,6 +19,7 @@ contract StakingPool {
 	uint256 public contributionLimit;
 
 	uint256 public totalStaked;
+
 	bytes32[] private patronRoles;
 	bytes32 private ownerRole;
 
@@ -111,6 +112,21 @@ contract StakingPool {
 		remainingRewards = msg.value;
 
 		emit StakingPoolInitialized(msg.value, block.timestamp);
+	}
+
+	function terminate() external initialized onlyOwner {
+		require(start >= block.timestamp, "Cannot terminate after start");
+
+		uint256 payout = remainingRewards;
+
+		delete start;
+		delete end;
+		delete hourlyRatio;
+		delete hardCap;
+		delete contributionLimit;
+		delete patronRoles;
+
+		payable(msg.sender).transfer(payout);
 	}
 
 	function stake()

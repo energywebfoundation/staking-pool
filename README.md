@@ -13,7 +13,7 @@ Deployed --> Initialized --> Open --> Expired --> Swept
 
 Transitions
 ```
-Deployed - smart contract deployed to the network and ownership transferred to organization owner address 
+Deployed - smart contract deployed to the network or terminate() called when in Initialized state
 
 Initialized - init() function executed
 

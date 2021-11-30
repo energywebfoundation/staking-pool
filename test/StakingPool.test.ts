@@ -142,13 +142,7 @@ describe("Staking Pool", function () {
 
   it("should revert when contribution limit is higher than hardCap", async function () {
     const { asOwner, end, rewards, start, owner, claimManagerMocked, defaultRoleVersion } = await loadFixture(
-      async (wallets: Wallet[], provider: MockProvider) => {
-        const { timestamp } = await provider.getBlock("latest");
-        const start = timestamp + 15;
-        const initializePool = false;
-
-        return fixture(hardCap, start, wallets, provider, initializePool);
-      },
+      uninitializedFixture,
     );
     const wrongContributionLimit = hardCap.add(1);
 
@@ -173,6 +167,20 @@ describe("Staking Pool", function () {
     await expect(
       asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], { value: smallerRewards }),
     ).to.be.revertedWith("Rewards lower than expected");
+  });
+
+  it("should allow to terminate staking pool before it reaches the start", async function () {
+    const { owner, asOwner, rewards } = await loadFixture(defaultFixture);
+
+    await expect(await asOwner.terminate()).to.changeEtherBalance(owner, rewards);
+  });
+
+  it("should not allow to terminate staking pool after it reaches the start", async function () {
+    const { asOwner, provider } = await loadFixture(defaultFixture);
+
+    await timeTravel(provider, 10);
+
+    await expect(asOwner.terminate()).to.be.revertedWith("Cannot terminate after start");
   });
 
   describe("Staking", async () => {
