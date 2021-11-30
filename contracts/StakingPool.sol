@@ -9,7 +9,6 @@ contract StakingPool {
 	using ABDKMath64x64 for int128;
 	using RolesLibrary for address;
 
-	address public owner;
 	address public claimManager;
 
 	uint256 public start;
@@ -38,10 +37,6 @@ contract StakingPool {
 	event StakeAdded(address indexed sender, uint256 amount, uint256 time);
 	event StakeWithdrawn(address indexed sender, uint256 amount);
 	event StakingPoolInitialized(uint256 funded, uint256 timestamp);
-	event OwnershipTransferred(
-		address indexed previousOwner,
-		address indexed newOwner
-	);
 
 	mapping(address => Stake) public stakes;
 
@@ -77,7 +72,6 @@ contract StakingPool {
 	}
 
 	constructor(bytes32 _ownerRole, address _claimManager) {
-		owner = msg.sender;
 		ownerRole = _ownerRole;
 		claimManager = _claimManager;
 	}
@@ -117,13 +111,6 @@ contract StakingPool {
 		remainingRewards = msg.value;
 
 		emit StakingPoolInitialized(msg.value, block.timestamp);
-	}
-
-	function changeOwner(address _newOwner) external onlyOwner {
-		require(owner != _newOwner, "changeOwner: already owner");
-		address oldOwner = owner;
-		owner = _newOwner;
-		emit OwnershipTransferred(oldOwner, _newOwner);
 	}
 
 	function stake()

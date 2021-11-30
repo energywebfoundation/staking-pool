@@ -137,20 +137,24 @@ describe("Staking Pool", function () {
   }
 
   it("should revert when contribution limit is higher than hardCap", async function () {
-    const { asOwner, end, rewards, start, owner, claimManagerMocked, defaultRoleVersion } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
-      const { timestamp } = await provider.getBlock("latest");
-      const start = timestamp + 15;
-      const initializePool = false
-      
-      return fixture(hardCap, start, wallets, provider, initializePool);
-    });
-    const  wrongContributionLimit = hardCap.add(1);
+    const { asOwner, end, rewards, start, owner, claimManagerMocked, defaultRoleVersion } = await loadFixture(
+      async (wallets: Wallet[], provider: MockProvider) => {
+        const { timestamp } = await provider.getBlock("latest");
+        const start = timestamp + 15;
+        const initializePool = false;
+
+        return fixture(hardCap, start, wallets, provider, initializePool);
+      },
+    );
+    const wrongContributionLimit = hardCap.add(1);
 
     await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
 
-    await expect(asOwner.init(start, end, ratioInt, hardCap, wrongContributionLimit , [patronRoleDef], {
-      value: rewards,
-    })).to.be.revertedWith("hardCap exceeded");
+    await expect(
+      asOwner.init(start, end, ratioInt, hardCap, wrongContributionLimit, [patronRoleDef], {
+        value: rewards,
+      }),
+    ).to.be.revertedWith("hardCap exceeded");
   });
 
   it("should revert when init rewards are lower than max future rewards", async function () {
@@ -165,27 +169,6 @@ describe("Staking Pool", function () {
     await expect(
       asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], { value: smallerRewards }),
     ).to.be.revertedWith("Rewards lower than expected");
-  });
-
-  it("Ownership can't be transferred to current owner", async function () {
-    const { owner, asOwner } = await loadFixture(defaultFixture);
-
-    await expect(asOwner.changeOwner(owner.address)).to.be.revertedWith("changeOwner: already owner");
-  });
-
-  it("Ownership can't be transferred by non owner", async function () {
-    const { asPatron1, patron1, claimManagerMocked, defaultRoleVersion } = await loadFixture(defaultFixture);
-
-    await claimManagerMocked.mock.hasRole.withArgs(patron1.address, ownerRoleDef, defaultRoleVersion).returns(false);
-
-    await expect(asPatron1.changeOwner(patron1.address)).to.be.revertedWith("OnlyOwner: Not an owner");
-  });
-
-  it("Ownership is correctly transferred", async function () {
-    const { asOwner, patron1, stakingPool } = await loadFixture(defaultFixture);
-
-    const tx = await asOwner.changeOwner(patron1.address);
-    await expect(tx).to.emit(stakingPool, "OwnershipTransferred");
   });
 
   describe("Staking", async () => {
@@ -254,16 +237,18 @@ describe("Staking Pool", function () {
 
     it("should revert when staking pool reached the hard cap", async function () {
       const hardCap = contributionLimit;
-      const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
-        const { timestamp } = await provider.getBlock("latest");
-        const start = timestamp + 11;
-        
-        return fixture(hardCap, start, wallets, provider);
-      });
+      const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(
+        async (wallets: Wallet[], provider: MockProvider) => {
+          const { timestamp } = await provider.getBlock("latest");
+          const start = timestamp + 11;
 
-      await asOwner.init(start, end, ratioInt, hardCap, contributionLimit , [patronRoleDef], {
-          value: rewards,
-        });
+          return fixture(hardCap, start, wallets, provider);
+        },
+      );
+
+      await asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
+        value: rewards,
+      });
       await asPatron1.stake({
         value: contributionLimit,
       });
