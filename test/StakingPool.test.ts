@@ -32,12 +32,11 @@ describe("Staking Pool", function () {
     provider: MockProvider,
     claimManagerMocked: MockContract,
   ) {
-    const defaultRoleVersion = 0;
-    const patronRole = utils.formatBytes32String("patron");
+    const defaultRoleVersion = 1;
     const { owner, patron1, patron2 } = await loadFixture(defaultFixture);
-    await claimManagerMocked.mock.hasRole.withArgs(owner.address, patronRole, defaultRoleVersion).returns(true);
-    await claimManagerMocked.mock.hasRole.withArgs(patron1.address, patronRole, defaultRoleVersion).returns(true);
-    await claimManagerMocked.mock.hasRole.withArgs(patron2.address, patronRole, defaultRoleVersion).returns(true);
+    await claimManagerMocked.mock.hasRole.withArgs(owner.address, patronRoleDef, defaultRoleVersion).returns(true);
+    await claimManagerMocked.mock.hasRole.withArgs(patron1.address, patronRoleDef, defaultRoleVersion).returns(true);
+    await claimManagerMocked.mock.hasRole.withArgs(patron2.address, patronRoleDef, defaultRoleVersion).returns(true);
 
     await stakingPool.stake({ value });
     await timeTravel(provider, seconds);
@@ -54,7 +53,7 @@ describe("Staking Pool", function () {
     const duration = 3600 * 24 * 30;
     const end = start + duration;
 
-    const defaultRoleVersion = 0;
+    const defaultRoleVersion = 1;
     const claimManagerMocked = await deployMockContract(patron1, claimManagerABI);
 
     const stakingPool = (await deployContract(owner, StakingPoolContract, [
@@ -186,7 +185,7 @@ describe("Staking Pool", function () {
   describe("Staking", async () => {
     it("should revert if patron doesn't have appropriate role", async function () {
       const { patron1, asPatron1, claimManagerMocked } = await loadFixture(defaultFixture);
-      const defaultRoleVersion = 0;
+      const defaultRoleVersion = 1;
 
       await claimManagerMocked.mock.hasRole.withArgs(patron1.address, patronRoleDef, defaultRoleVersion).returns(false);
 
@@ -324,6 +323,21 @@ describe("Staking Pool", function () {
       expect(stakeAfterExpiry).to.be.equal(deposit);
       expect(compoundedAfterExpiry).to.be.equal(compounded);
     });
+
+    it("Should update Role versioning ", async function() {
+      const { asOwner, defaultRoleVersion } = await loadFixture(defaultFixture);
+      let roleVersion = await asOwner.roleVersion();
+      expect(roleVersion).to.equal(defaultRoleVersion);
+      await asOwner.setRoleVersion(2);
+      roleVersion = await asOwner.roleVersion();
+      expect(roleVersion).to.equal(2);
+    });
+
+    it("Should revert if non owner tries to update version role ", async function() {
+      const { asPatron1, patron1, claimManagerMocked, defaultRoleVersion } = await loadFixture(defaultFixture);
+      await claimManagerMocked.mock.hasRole.withArgs(patron1.address, ownerRoleDef, defaultRoleVersion).returns(false);
+      await expect(asPatron1.setRoleVersion(2)).to.be.revertedWith("OnlyOwner: Not an owner");
+    })
   });
 
   describe("Unstaking", async () => {

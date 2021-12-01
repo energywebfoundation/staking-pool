@@ -19,7 +19,7 @@ contract StakingPool {
 	uint256 public contributionLimit;
 
 	uint256 public totalStaked;
-
+	uint256 public roleVersion;
 	bytes32[] private patronRoles;
 	bytes32 private ownerRole;
 
@@ -44,7 +44,7 @@ contract StakingPool {
 	modifier onlyOwner() {
 		// restrict to accounts enrolled as owner at energyweb
 		require(
-			msg.sender.isOwner(claimManager, ownerRole),
+			msg.sender.isOwner(claimManager, ownerRole, roleVersion),
 			"OnlyOwner: Not an owner"
 		);
 		_;
@@ -53,7 +53,7 @@ contract StakingPool {
 	modifier onlyPatrons(address _agent) {
 		// checking patron role with claimManager
 		require(
-			_agent.hasRole(claimManager, patronRoles),
+			_agent.hasRole(claimManager, patronRoles, roleVersion),
 			"StakingPool: Not a patron"
 		);
 		_;
@@ -75,6 +75,7 @@ contract StakingPool {
 	constructor(bytes32 _ownerRole, address _claimManager) {
 		ownerRole = _ownerRole;
 		claimManager = _claimManager;
+		roleVersion = 1;
 	}
 
 	function init(
@@ -112,6 +113,10 @@ contract StakingPool {
 		remainingRewards = msg.value;
 
 		emit StakingPoolInitialized(msg.value, block.timestamp);
+	}
+
+	function  setRoleVersion(uint256 _newVersion) onlyOwner external {
+		roleVersion = _newVersion;
 	}
 
 	function terminate() external initialized onlyOwner {
