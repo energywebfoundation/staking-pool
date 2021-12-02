@@ -1,6 +1,6 @@
 import { expect, use } from "chai";
 import { StakingPool } from "../ethers";
-import { Wallet, utils, BigNumber } from "ethers";
+import { Wallet, utils, BigNumber, providers } from "ethers";
 import { claimManagerABI } from "./utils/claimManager_abi";
 import { deployMockContract, MockContract } from "@ethereum-waffle/mock-contract";
 import { deployContract, loadFixture, MockProvider, solidity } from "ethereum-waffle";
@@ -115,7 +115,7 @@ describe("Staking Pool", function () {
 
   async function defaultFixture(wallets: Wallet[], provider: MockProvider) {
     const { timestamp } = await provider.getBlock("latest");
-    const start = timestamp + 10;
+    const start = timestamp + 12;
 
     return fixture(hardCap, start, wallets, provider);
   }
@@ -215,8 +215,8 @@ describe("Staking Pool", function () {
 
       const [deposit, compounded] = await asPatron1.total();
 
-      expect(deposit).to.be.equal(compounded);
-      expect(deposit).to.be.equal(oneEWT);
+      await expect(deposit).to.be.equal(compounded);
+      await expect(deposit).to.be.equal(oneEWT);
     });
 
     it("can stake funds multiple times", async function () {
@@ -244,22 +244,24 @@ describe("Staking Pool", function () {
           value: oneEWT,
         }),
       ).to.changeEtherBalance(stakingPool, oneEWT);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     });
 
     it("should revert when staking pool reached the hard cap", async function () {
       const hardCap = contributionLimit;
-      const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(
+      const { asPatron1, asPatron2, asOwner, end, rewards, start, provider } = await loadFixture(
         async (wallets: Wallet[], provider: MockProvider) => {
           const { timestamp } = await provider.getBlock("latest");
-          const start = timestamp + 10;
+          const start = timestamp + 12;
 
           return fixture(hardCap, start, wallets, provider);
         },
       );
-
-      await asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
+      asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
         value: rewards,
       });
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       await asPatron1.stake({
         value: contributionLimit,
       });
@@ -281,6 +283,7 @@ describe("Staking Pool", function () {
           value: patronStake,
         }),
       ).to.be.revertedWith("Stake greater than contribution limit");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     });
 
     it("should revert when staking pool has not yet started", async function () {
@@ -295,6 +298,7 @@ describe("Staking Pool", function () {
           value: oneEWT,
         }),
       ).to.be.revertedWith("Staking pool not yet started");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     });
 
     it("should revert when staking pool already expired", async function () {
@@ -307,6 +311,7 @@ describe("Staking Pool", function () {
           value: oneEWT,
         }),
       ).to.be.revertedWith("Staking pool already expired");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     });
 
     it("should not compound stake after reaching expiry date", async function () {
@@ -324,7 +329,7 @@ describe("Staking Pool", function () {
       expect(compoundedAfterExpiry).to.be.equal(compounded);
     });
 
-    it("Should update Role versioning ", async function() {
+    it("Should update Role versioning ", async function () {
       const { asOwner, defaultRoleVersion } = await loadFixture(defaultFixture);
       let roleVersion = await asOwner.roleVersion();
       expect(roleVersion).to.equal(defaultRoleVersion);
@@ -333,11 +338,11 @@ describe("Staking Pool", function () {
       expect(roleVersion).to.equal(2);
     });
 
-    it("Should revert if non owner tries to update version role ", async function() {
+    it("Should revert if non owner tries to update version role ", async function () {
       const { asPatron1, patron1, claimManagerMocked, defaultRoleVersion } = await loadFixture(defaultFixture);
       await claimManagerMocked.mock.hasRole.withArgs(patron1.address, ownerRoleDef, defaultRoleVersion).returns(false);
       await expect(asPatron1.setRoleVersion(2)).to.be.revertedWith("OnlyOwner: Not an owner");
-    })
+    });
   });
 
   describe("Unstaking", async () => {

@@ -15,7 +15,18 @@ const deployer_privateKey = process.env.DEPLOYER_PRIV_KEY || defaultAccounts[0].
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.6",
+  solidity: {
+    version: "0.8.6",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
+  mocha: {
+    timeout: 20000,
+  },
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {

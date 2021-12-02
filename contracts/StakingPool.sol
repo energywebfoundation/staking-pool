@@ -9,7 +9,7 @@ contract StakingPool {
 	using ABDKMath64x64 for int128;
 	using RolesLibrary for address;
 
-	address public claimManager;
+	address private immutable claimManager;
 
 	uint256 public start;
 	uint256 public end;
