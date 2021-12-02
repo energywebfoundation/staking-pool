@@ -183,6 +183,10 @@ describe("Staking Pool", function () {
   });
 
   describe("Staking", async () => {
+    this.beforeEach(async () => {
+      console.log("...");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    })
     it("should revert if patron doesn't have appropriate role", async function () {
       const { patron1, asPatron1, claimManagerMocked } = await loadFixture(defaultFixture);
       const defaultRoleVersion = 1;
@@ -244,7 +248,6 @@ describe("Staking Pool", function () {
           value: oneEWT,
         }),
       ).to.changeEtherBalance(stakingPool, oneEWT);
-      await new Promise((resolve) => setTimeout(resolve, 2000));
     });
 
     it("should revert when staking pool reached the hard cap", async function () {
@@ -252,15 +255,14 @@ describe("Staking Pool", function () {
       const { asPatron1, asPatron2, asOwner, end, rewards, start, provider } = await loadFixture(
         async (wallets: Wallet[], provider: MockProvider) => {
           const { timestamp } = await provider.getBlock("latest");
-          const start = timestamp + 12;
+          const start = timestamp + 20;
 
           return fixture(hardCap, start, wallets, provider);
         },
       );
-      asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
+      await asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
         value: rewards,
       });
-      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       await asPatron1.stake({
         value: contributionLimit,
