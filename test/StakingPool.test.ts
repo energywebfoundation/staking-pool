@@ -2,7 +2,7 @@ import { expect, use } from "chai";
 import { StakingPool } from "../ethers";
 import { Wallet, utils, BigNumber } from "ethers";
 import { claimManagerABI } from "./utils/claimManager_abi";
-import { deployMockContract, MockContract } from "@ethereum-waffle/mock-contract";
+import { deployMockContract } from "@ethereum-waffle/mock-contract";
 import { deployContract, loadFixture, MockProvider, solidity } from "ethereum-waffle";
 import StakingPoolContract from "../artifacts/contracts/StakingPool.sol/StakingPool.json";
 
@@ -19,26 +19,14 @@ describe("Staking Pool", function () {
 
   const defaultRoleVersion = 1;
   const patronRoleDef = utils.namehash("email.roles.verification.apps.energyweb.iam.ewc");
-  const ownerRoleDef = utils.namehash("owner.roles.stakingpool.apps.energyweb.iam.ewc");
+  const ownerRoleDef = utils.namehash("owner.roles.staking.apps.energyweb.iam.ewc");
 
   const timeTravel = async (provider: MockProvider, seconds: number) => {
     await provider.send("evm_increaseTime", [seconds]);
     await provider.send("evm_mine", []);
   };
 
-  async function stakeAndTravel(
-    stakingPool: StakingPool,
-    value: BigNumber,
-    seconds: number,
-    provider: MockProvider,
-    claimManagerMocked: MockContract,
-  ) {
-    const patronRole = utils.formatBytes32String("patron");
-    const { owner, patron1, patron2 } = await loadFixture(defaultFixture);
-    await claimManagerMocked.mock.hasRole.withArgs(owner.address, patronRole, defaultRoleVersion).returns(true);
-    await claimManagerMocked.mock.hasRole.withArgs(patron1.address, patronRole, defaultRoleVersion).returns(true);
-    await claimManagerMocked.mock.hasRole.withArgs(patron2.address, patronRole, defaultRoleVersion).returns(true);
-
+  async function stakeAndTravel(stakingPool: StakingPool, value: BigNumber, seconds: number, provider: any) {
     await stakingPool.stake({ value });
     await timeTravel(provider, seconds);
   }
@@ -46,7 +34,7 @@ describe("Staking Pool", function () {
   async function fixture(
     hardCap: BigNumber,
     start: number,
-    [owner, patron1, patron2]: Wallet[],
+    [owner, owner2, patron1, patron2]: Wallet[],
     provider: MockProvider,
     initializePool = true,
     travel = true,
@@ -66,6 +54,7 @@ describe("Staking Pool", function () {
       const asOwner = stakingPool.connect(owner);
       try {
         await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
+        await claimManagerMocked.mock.hasRole.withArgs(owner2.address, ownerRoleDef, defaultRoleVersion).returns(true);
 
         await claimManagerMocked.mock.hasRole
           .withArgs(patron1.address, patronRoleDef, defaultRoleVersion)
@@ -101,6 +90,7 @@ describe("Staking Pool", function () {
       asPatron1: stakingPool.connect(patron1),
       asPatron2: stakingPool.connect(patron2),
       asOwner: stakingPool.connect(owner),
+      asOwner2: stakingPool.connect(owner2),
       provider,
       duration,
       defaultRoleVersion,
@@ -131,9 +121,9 @@ describe("Staking Pool", function () {
     const start = timestamp + 10;
 
     const setup = await fixture(hardCap, start, wallets, provider);
-    const { asPatron1, duration, claimManagerMocked } = setup;
+    const { asPatron1, duration } = setup;
 
-    await stakeAndTravel(asPatron1, oneEWT, duration, setup.provider, claimManagerMocked);
+    await stakeAndTravel(asPatron1, oneEWT, duration, setup.provider);
 
     return setup;
   }
@@ -179,6 +169,12 @@ describe("Staking Pool", function () {
     await timeTravel(provider, 10);
 
     await expect(asOwner.terminate()).to.be.revertedWith("Cannot terminate after start");
+  });
+
+  it("should send back the funds to original initiator", async function () {
+    const { owner, asOwner2, rewards } = await loadFixture(defaultFixture);
+
+    await expect(await asOwner2.terminate()).to.changeEtherBalance(owner, rewards);
   });
 
   describe("Staking", async () => {
@@ -311,9 +307,9 @@ describe("Staking Pool", function () {
     });
 
     it("should not compound stake after reaching expiry date", async function () {
-      const { asPatron1, duration, provider, claimManagerMocked } = await loadFixture(defaultFixture);
+      const { asPatron1, duration, provider } = await loadFixture(defaultFixture);
 
-      await stakeAndTravel(asPatron1, oneEWT, duration + 1, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, oneEWT, duration + 1, provider);
 
       const [deposit, compounded] = await asPatron1.total();
 
@@ -363,11 +359,11 @@ describe("Staking Pool", function () {
     });
 
     it("should allow partial withdrawal up to compounded value", async function () {
-      const { asPatron1, provider, duration, claimManagerMocked } = await loadFixture(defaultFixture);
+      const { asPatron1, provider, duration } = await loadFixture(defaultFixture);
 
       const initialStake = oneEWT;
 
-      await stakeAndTravel(asPatron1, initialStake, duration / 2, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, initialStake, duration / 2, provider);
 
       let [deposit, compounded] = await asPatron1.total();
 
@@ -461,24 +457,21 @@ describe("Staking Pool", function () {
     });
 
     it("should sweep remaining rewards when patron staked multiple times", async function () {
-      const { owner, asPatron1, asOwner, duration, provider, rewards, claimManagerMocked } = await loadFixture(
-        defaultFixture,
-      );
+      const { owner, asPatron1, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
 
-      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider, claimManagerMocked);
-      await stakeAndTravel(asPatron1, oneEWT, duration, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
+      await stakeAndTravel(asPatron1, oneEWT, duration, provider);
 
       await assertTransferAndBalance(rewards, [asPatron1], asOwner, owner, provider);
     });
 
     it("should sweep remaining rewards when patron staked multiple times from multiple patrons", async function () {
-      const { owner, asPatron1, asPatron2, asOwner, duration, provider, rewards, claimManagerMocked } =
-        await loadFixture(defaultFixture);
+      const { owner, asPatron1, asPatron2, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
 
-      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider, claimManagerMocked);
-      await stakeAndTravel(asPatron2, oneEWT, 0, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
+      await stakeAndTravel(asPatron2, oneEWT, 0, provider);
 
-      await stakeAndTravel(asPatron1, oneEWT, duration, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, oneEWT, duration, provider);
 
       const expectedSweep = await calculateExpectedSweep([asPatron1, asPatron2], rewards);
       await assertTransferAndBalance(rewards, [asPatron1, asPatron2], asOwner, owner, provider, expectedSweep);
@@ -495,11 +488,9 @@ describe("Staking Pool", function () {
     });
 
     it("should sweep remaining rewards when patron staked and withdrawn before expiry", async function () {
-      const { owner, asPatron1, asOwner, duration, provider, rewards, claimManagerMocked } = await loadFixture(
-        defaultFixture,
-      );
+      const { owner, asPatron1, asOwner, duration, provider, rewards } = await loadFixture(defaultFixture);
 
-      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider, claimManagerMocked);
+      await stakeAndTravel(asPatron1, oneEWT, duration / 2, provider);
 
       await asPatron1.unstake(oneEWT);
 

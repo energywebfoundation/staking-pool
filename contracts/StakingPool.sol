@@ -28,6 +28,8 @@ contract StakingPool {
 
 	bool public sweeped;
 
+	address private initiator;
+
 	struct Stake {
 		uint256 deposit;
 		uint256 compounded;
@@ -111,6 +113,8 @@ contract StakingPool {
 
 		remainingRewards = msg.value;
 
+		initiator = msg.sender;
+
 		emit StakingPoolInitialized(msg.value, block.timestamp);
 	}
 
@@ -118,6 +122,7 @@ contract StakingPool {
 		require(start >= block.timestamp, "Cannot terminate after start");
 
 		uint256 payout = remainingRewards;
+		address receipient = initiator;
 
 		delete start;
 		delete end;
@@ -125,8 +130,9 @@ contract StakingPool {
 		delete hardCap;
 		delete contributionLimit;
 		delete patronRoles;
+		delete initiator;
 
-		payable(msg.sender).transfer(payout);
+		payable(receipient).transfer(payout);
 	}
 
 	function stake()
@@ -202,7 +208,7 @@ contract StakingPool {
 
 		sweeped = true;
 
-		payable(msg.sender).transfer(payout);
+		payable(initiator).transfer(payout);
 	}
 
 	function calculateFutureReward() private view returns (uint256) {

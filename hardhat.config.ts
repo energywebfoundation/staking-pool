@@ -18,12 +18,6 @@ module.exports = {
   solidity: "0.8.6",
   defaultNetwork: "hardhat",
   networks: {
-    hardhat: {
-      mining: {
-        auto: true,
-        interval: 5000,
-      },
-    },
     volta: {
       url: "https://volta-rpc.energyweb.org",
       chainId: 73799,
