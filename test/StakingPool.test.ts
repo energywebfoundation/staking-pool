@@ -104,9 +104,16 @@ describe("Staking Pool", function () {
 
   async function defaultFixture(wallets: Wallet[], provider: MockProvider) {
     const { timestamp } = await provider.getBlock("latest");
-    const start = timestamp + 12;
+    const start = timestamp + 10;
 
     return fixture(hardCap, start, wallets, provider);
+  }
+
+  async function initNoTravelFixture(wallets: Wallet[], provider: MockProvider) {
+    const { timestamp } = await provider.getBlock("latest");
+    const start = timestamp + 10;
+
+    return fixture(hardCap, start, wallets, provider, true, false);
   }
 
   async function uninitializedFixture(wallets: Wallet[], provider: MockProvider) {
@@ -158,7 +165,7 @@ describe("Staking Pool", function () {
   });
 
   it("should allow to terminate staking pool before it reaches the start", async function () {
-    const { owner, asOwner, rewards } = await loadFixture(defaultFixture);
+    const { owner, asOwner, rewards } = await loadFixture(initNoTravelFixture);
 
     await expect(await asOwner.terminate()).to.changeEtherBalance(owner, rewards);
   });
@@ -172,16 +179,12 @@ describe("Staking Pool", function () {
   });
 
   it("should send back the funds to original initiator", async function () {
-    const { owner, asOwner2, rewards } = await loadFixture(defaultFixture);
+    const { owner, asOwner2, rewards } = await loadFixture(initNoTravelFixture);
 
     await expect(await asOwner2.terminate()).to.changeEtherBalance(owner, rewards);
   });
 
   describe("Staking", async () => {
-    this.beforeEach(async () => {
-      console.log("...");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    });
     it("should revert if patron doesn't have appropriate role", async function () {
       const { patron1, asPatron1, claimManagerMocked } = await loadFixture(defaultFixture);
       await claimManagerMocked.mock.hasRole.withArgs(patron1.address, patronRoleDef, defaultRoleVersion).returns(false);
