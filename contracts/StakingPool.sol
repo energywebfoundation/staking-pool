@@ -28,7 +28,7 @@ contract StakingPool {
 
 	bool public sweeped;
 
-	address private initiator;
+	address internal initiator;
 
 	struct Stake {
 		uint256 deposit;
@@ -43,7 +43,7 @@ contract StakingPool {
 
 	mapping(address => Stake) public stakes;
 
-	modifier onlyOwner() {
+	modifier onlyOwner() virtual {
 		// restrict to accounts enrolled as owner at energyweb
 		require(
 			msg.sender.isOwner(claimManager, ownerRole),
@@ -52,7 +52,7 @@ contract StakingPool {
 		_;
 	}
 
-	modifier onlyPatrons(address _agent) {
+	modifier onlyPatrons(address _agent) virtual {
 		// checking patron role with claimManager
 		require(
 			_agent.hasRole(claimManager, patronRoles),
@@ -238,7 +238,7 @@ contract StakingPool {
 	function updateStake(uint256 deposit, uint256 compounded) private {
 		stakes[msg.sender].deposit = deposit;
 		stakes[msg.sender].compounded = compounded;
-		if (block.timestamp - stakes[msg.sender].time >= 1 hours){
+		if (block.timestamp - stakes[msg.sender].time >= 1 hours) {
 			stakes[msg.sender].time = block.timestamp;
 		}
 	}

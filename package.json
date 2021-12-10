@@ -20,6 +20,7 @@
     "cuke": "hardhat compile && tsc && cucumber-js",
     "deploy:dev": "concurrently \"hardhat node\" \"hardhat run scripts/deploy.js\"",
     "deploy:volta": "hardhat run scripts/deploy.js --network volta",
+    "deploy:volta:nokyc": "hardhat run scripts/deploy-no-kyc.js --network volta",
     "prepare": "git apply --ignore-whitespace patches/@ensdomains+ens-contracts+0.0.4.patch && is-ci || husky install",
     "lint": "npx eslint . --ext .ts --fix",
     "hardhat:coverage": "npx hardhat coverage",
