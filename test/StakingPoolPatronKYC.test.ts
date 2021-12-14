@@ -4,11 +4,11 @@ import { Wallet, utils, BigNumber } from "ethers";
 import { claimManagerABI } from "./utils/claimManager_abi";
 import { deployMockContract } from "@ethereum-waffle/mock-contract";
 import { deployContract, loadFixture, MockProvider, solidity } from "ethereum-waffle";
-import StakingPoolContract from "../artifacts/contracts/StakingPool.sol/StakingPool.json";
+import StakingPoolContract from "../artifacts/contracts/StakingPoolPatronKYC.sol/StakingPoolPatronKYC.json";
 
 use(solidity);
 
-describe("Staking Pool", function () {
+describe("Staking Pool Patron KYC", function () {
   const oneEWT = utils.parseUnits("1", "ether");
 
   const hardCap = oneEWT.mul(5000000);
@@ -19,7 +19,6 @@ describe("Staking Pool", function () {
 
   const defaultRoleVersion = 1;
   const patronRoleDef = utils.namehash("email.roles.verification.apps.energyweb.iam.ewc");
-  const ownerRoleDef = utils.namehash("owner.roles.staking.apps.energyweb.iam.ewc");
 
   const timeTravel = async (provider: MockProvider, seconds: number) => {
     await provider.send("evm_increaseTime", [seconds]);
@@ -44,7 +43,7 @@ describe("Staking Pool", function () {
     const claimManagerMocked = await deployMockContract(patron1, claimManagerABI);
 
     const stakingPool = (await deployContract(owner, StakingPoolContract, [
-      ownerRoleDef,
+      owner.address,
       claimManagerMocked.address,
     ])) as StakingPool;
 
@@ -53,9 +52,6 @@ describe("Staking Pool", function () {
     if (initializePool) {
       const asOwner = stakingPool.connect(owner);
       try {
-        await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
-        await claimManagerMocked.mock.hasRole.withArgs(owner2.address, ownerRoleDef, defaultRoleVersion).returns(true);
-
         await claimManagerMocked.mock.hasRole
           .withArgs(patron1.address, patronRoleDef, defaultRoleVersion)
           .returns(true);
@@ -136,12 +132,8 @@ describe("Staking Pool", function () {
   }
 
   it("should revert when contribution limit is higher than hardCap", async function () {
-    const { asOwner, end, rewards, start, owner, claimManagerMocked, defaultRoleVersion } = await loadFixture(
-      uninitializedFixture,
-    );
+    const { asOwner, end, rewards, start } = await loadFixture(uninitializedFixture);
     const wrongContributionLimit = hardCap.add(1);
-
-    await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
 
     await expect(
       asOwner.init(start, end, ratioInt, hardCap, wrongContributionLimit, [patronRoleDef], {
@@ -151,11 +143,7 @@ describe("Staking Pool", function () {
   });
 
   it("should revert when init rewards are lower than max future rewards", async function () {
-    const { owner, asOwner, start, end, hardCap, claimManagerMocked, defaultRoleVersion, rewards } = await loadFixture(
-      uninitializedFixture,
-    );
-
-    await claimManagerMocked.mock.hasRole.withArgs(owner.address, ownerRoleDef, defaultRoleVersion).returns(true);
+    const { asOwner, start, end, hardCap, rewards } = await loadFixture(uninitializedFixture);
 
     const smallerRewards = rewards.sub(1);
 
@@ -179,9 +167,9 @@ describe("Staking Pool", function () {
   });
 
   it("should send back the funds to original initiator", async function () {
-    const { owner, asOwner2, rewards } = await loadFixture(initNoTravelFixture);
+    const { owner, asOwner, rewards } = await loadFixture(initNoTravelFixture);
 
-    await expect(await asOwner2.terminate()).to.changeEtherBalance(owner, rewards);
+    await expect(await asOwner.terminate()).to.changeEtherBalance(owner, rewards);
   });
 
   describe("Staking", async () => {
@@ -248,14 +236,12 @@ describe("Staking Pool", function () {
 
     it("should revert when staking pool reached the hard cap", async function () {
       const hardCap = contributionLimit;
-      const { asPatron1, asPatron2, asOwner, end, rewards, start } = await loadFixture(
-        async (wallets: Wallet[], provider: MockProvider) => {
-          const { timestamp } = await provider.getBlock("latest");
-          const start = timestamp + 10;
+      const { asPatron1, asPatron2 } = await loadFixture(async (wallets: Wallet[], provider: MockProvider) => {
+        const { timestamp } = await provider.getBlock("latest");
+        const start = timestamp + 10;
 
-          return fixture(hardCap, start, wallets, provider);
-        },
-      );
+        return fixture(hardCap, start, wallets, provider);
+      });
 
       await asPatron1.stake({
         value: contributionLimit,

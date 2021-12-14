@@ -18,9 +18,12 @@
     "test": "hardhat test --show-stack-traces",
     "compile": "hardhat compile",
     "cuke": "hardhat compile && tsc && cucumber-js",
+    "flatten": "hardhat flatten > scripts/utils/verifyUtils",
     "deploy:dev": "concurrently \"hardhat node\" \"hardhat run scripts/deploy.js\"",
     "deploy:volta": "hardhat run scripts/deploy.js --network volta",
+    "verify": "npm run flatten && hardhat run scripts/verify.js",
     "deploy:volta:nokyc": "hardhat run scripts/deploy-no-kyc.js --network volta",
+    "deploy:volta:patronkyc": "hardhat run scripts/deploy-patron-kyc.js --network volta",
     "prepare": "git apply --ignore-whitespace patches/@ensdomains+ens-contracts+0.0.4.patch && is-ci || husky install",
     "lint": "npx eslint . --ext .ts --fix",
     "hardhat:coverage": "npx hardhat coverage",
@@ -51,6 +54,7 @@
     "@types/node": "^16.11.7",
     "@typescript-eslint/eslint-plugin": "^5.4.0",
     "@typescript-eslint/parser": "^5.4.0",
+    "axios": "^0.24.0",
     "bili": "^5.0.5",
     "chai": "^4.3.4",
     "concurrently": "6.4.0",
@@ -110,5 +114,8 @@
       "@semantic-release/npm",
       "@semantic-release/git"
     ]
+  },
+  "dependencies": {
+    "prompt-sync": "^4.2.0"
   }
 }

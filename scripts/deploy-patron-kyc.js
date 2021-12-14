@@ -12,9 +12,10 @@ const deployContract = async (contractName) => {
   const Contract = await ethers.getContractFactory(contractName);
 
   const initiator = Contract.signer.address;
+  const VOLTA_CLAIM_MANAGER_ADDRESS = "0xC3dD7ED75779b33F5Cfb709E0aB02b71fbFA3210";
 
   try {
-    const deployedContract = await Contract.deploy(initiator);
+    const deployedContract = await Contract.deploy(initiator, VOLTA_CLAIM_MANAGER_ADDRESS);
     displayContractInfos(contractName, deployedContract);
     console.log(`${emoji.emojify(":large_green_circle:")} ${contractName} deployed`);
 
@@ -32,7 +33,7 @@ const initializeContract = async (_deployedContract) => {
   const ratio = ethers.utils.parseUnits("0.0000225", 18);
   const hardCap = ethers.utils.parseUnits("50", "ether");
   const contributionLimit = ethers.utils.parseUnits("5", "ether");
-  const patronRoles = [];
+  const patronRoles = [ethers.utils.namehash("email.roles.verification.apps.energyweb.iam.ewc")];
   const rewards = (await _deployedContract.compound(ratio, hardCap, start, end)).sub(hardCap);
 
   console.log(
@@ -81,7 +82,7 @@ module.exports = {
 };
 
 async function main() {
-  const stakingPoolContract = await deployContract("StakingPoolNoKYC");
+  const stakingPoolContract = await deployContract("StakingPoolPatronKYC");
   if (stakingPoolContract) {
     await initializeContract(stakingPoolContract);
   }

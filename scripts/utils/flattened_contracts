@@ -1,0 +1,4879 @@
+// Sources flattened with hardhat v2.7.0 https://hardhat.org
+
+// File @ensdomains/ens-contracts/contracts/registry/ENS.sol@v0.0.4
+
+// SPDX-License-Identifier: MIT"
+pragma solidity ^0.8.6;
+
+interface ENS {
+
+    // Logged when the owner of a node assigns a new owner to a subnode.
+    event NewOwner(bytes32 indexed node, bytes32 indexed label, address owner);
+
+    // Logged when the owner of a node transfers ownership to a new account.
+    event Transfer(bytes32 indexed node, address owner);
+
+    // Logged when the resolver for a node changes.
+    event NewResolver(bytes32 indexed node, address resolver);
+
+    // Logged when the TTL of a node changes
+    event NewTTL(bytes32 indexed node, uint64 ttl);
+
+    // Logged when an operator is added or removed.
+    event ApprovalForAll(address indexed owner, address indexed operator, bool approved);
+
+    function setRecord(bytes32 node, address owner, address resolver, uint64 ttl) external;
+    function setSubnodeRecord(bytes32 node, bytes32 label, address owner, address resolver, uint64 ttl) external;
+    function setSubnodeOwner(bytes32 node, bytes32 label, address owner) external returns(bytes32);
+    function setResolver(bytes32 node, address resolver) external;
+    function setOwner(bytes32 node, address owner) external;
+    function setTTL(bytes32 node, uint64 ttl) external;
+    function setApprovalForAll(address operator, bool approved) external;
+    function owner(bytes32 node) external view returns (address);
+    function resolver(bytes32 node) external view returns (address);
+    function ttl(bytes32 node) external view returns (uint64);
+    function recordExists(bytes32 node) external view returns (bool);
+    function isApprovedForAll(address owner, address operator) external view returns (bool);
+}
+
+
+// File @ensdomains/ens-contracts/contracts/registry/ENSRegistry.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+/**
+ * The ENS registry contract.
+ */
+contract ENSRegistry is ENS {
+
+    struct Record {
+        address owner;
+        address resolver;
+        uint64 ttl;
+    }
+
+    mapping (bytes32 => Record) records;
+    mapping (address => mapping(address => bool)) operators;
+
+    // Permits modifications only by the owner of the specified node.
+    modifier authorised(bytes32 node) {
+        address _owner = records[node].owner;
+        require(_owner == msg.sender || operators[_owner][msg.sender]);
+        _;
+    }
+
+    /**
+     * @dev Constructs a new ENS registrar.
+     */
+    constructor() {
+        records[0x0].owner = msg.sender;
+    }
+
+    /**
+     * @dev Sets the record for a node.
+     * @param node The node to update.
+     * @param _owner The address of the new owner.
+     * @param _resolver The address of the resolver.
+     * @param _ttl The TTL in seconds.
+     */
+    function setRecord(bytes32 node, address _owner, address _resolver, uint64 _ttl) external virtual override {
+        setOwner(node, _owner);
+        _setResolverAndTTL(node, _resolver, _ttl);
+    }
+
+    /**
+     * @dev Sets the record for a subnode.
+     * @param node The parent node.
+     * @param label The hash of the label specifying the subnode.
+     * @param _owner The address of the new owner.
+     * @param _resolver The address of the resolver.
+     * @param _ttl The TTL in seconds.
+     */
+    function setSubnodeRecord(bytes32 node, bytes32 label, address _owner, address _resolver, uint64 _ttl) external virtual override {
+        bytes32 subnode = setSubnodeOwner(node, label, _owner);
+        _setResolverAndTTL(subnode, _resolver, _ttl);
+    }
+
+    /**
+     * @dev Transfers ownership of a node to a new address. May only be called by the current owner of the node.
+     * @param node The node to transfer ownership of.
+     * @param _owner The address of the new owner.
+     */
+    function setOwner(bytes32 node, address _owner) public virtual override authorised(node) {
+        _setOwner(node, _owner);
+        emit Transfer(node, _owner);
+    }
+
+    /**
+     * @dev Transfers ownership of a subnode keccak256(node, label) to a new address. May only be called by the owner of the parent node.
+     * @param node The parent node.
+     * @param label The hash of the label specifying the subnode.
+     * @param _owner The address of the new owner.
+     */
+    function setSubnodeOwner(bytes32 node, bytes32 label, address _owner) public virtual override authorised(node) returns(bytes32) {
+        bytes32 subnode = keccak256(abi.encodePacked(node, label));
+        _setOwner(subnode, _owner);
+        emit NewOwner(node, label, _owner);
+        return subnode;
+    }
+
+    /**
+     * @dev Sets the resolver address for the specified node.
+     * @param node The node to update.
+     * @param _resolver The address of the resolver.
+     */
+    function setResolver(bytes32 node, address _resolver) public virtual override authorised(node) {
+        emit NewResolver(node, _resolver);
+        records[node].resolver = _resolver;
+    }
+
+    /**
+     * @dev Sets the TTL for the specified node.
+     * @param node The node to update.
+     * @param _ttl The TTL in seconds.
+     */
+    function setTTL(bytes32 node, uint64 _ttl) public virtual override authorised(node) {
+        emit NewTTL(node, _ttl);
+        records[node].ttl = _ttl;
+    }
+
+    /**
+     * @dev Enable or disable approval for a third party ("operator") to manage
+     *  all of `msg.sender`'s ENS records. Emits the ApprovalForAll event.
+     * @param operator Address to add to the set of authorized operators.
+     * @param approved True if the operator is approved, false to revoke approval.
+     */
+    function setApprovalForAll(address operator, bool approved) external virtual override {
+        operators[msg.sender][operator] = approved;
+        emit ApprovalForAll(msg.sender, operator, approved);
+    }
+
+    /**
+     * @dev Returns the address that owns the specified node.
+     * @param node The specified node.
+     * @return address of the owner.
+     */
+    function owner(bytes32 node) public virtual override view returns (address) {
+        address addr = records[node].owner;
+        if (addr == address(this)) {
+            return address(0x0);
+        }
+
+        return addr;
+    }
+
+    /**
+     * @dev Returns the address of the resolver for the specified node.
+     * @param node The specified node.
+     * @return address of the resolver.
+     */
+    function resolver(bytes32 node) public virtual override view returns (address) {
+        return records[node].resolver;
+    }
+
+    /**
+     * @dev Returns the TTL of a node, and any records associated with it.
+     * @param node The specified node.
+     * @return ttl of the node.
+     */
+    function ttl(bytes32 node) public virtual override view returns (uint64) {
+        return records[node].ttl;
+    }
+
+    /**
+     * @dev Returns whether a record has been imported to the registry.
+     * @param node The specified node.
+     * @return Bool if record exists
+     */
+    function recordExists(bytes32 node) public virtual override view returns (bool) {
+        return records[node].owner != address(0x0);
+    }
+
+    /**
+     * @dev Query if an address is an authorized operator for another address.
+     * @param _owner The address that owns the records.
+     * @param operator The address that acts on behalf of the owner.
+     * @return True if `operator` is an approved operator for `owner`, false otherwise.
+     */
+    function isApprovedForAll(address _owner, address operator) external virtual override view returns (bool) {
+        return operators[_owner][operator];
+    }
+
+    function _setOwner(bytes32 node, address _owner) internal virtual {
+        records[node].owner = _owner;
+    }
+
+    function _setResolverAndTTL(bytes32 node, address _resolver, uint64 _ttl) internal {
+        if(_resolver != records[node].resolver) {
+            records[node].resolver = _resolver;
+            emit NewResolver(node, _resolver);
+        }
+
+        if(_ttl != records[node].ttl) {
+            records[node].ttl = _ttl;
+            emit NewTTL(node, _ttl);
+        }
+    }
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/cryptography/ECDSAUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Elliptic Curve Digital Signature Algorithm (ECDSA) operations.
+ *
+ * These functions can be used to verify that a message was signed by the holder
+ * of the private keys of a given address.
+ */
+library ECDSAUpgradeable {
+    enum RecoverError {
+        NoError,
+        InvalidSignature,
+        InvalidSignatureLength,
+        InvalidSignatureS,
+        InvalidSignatureV
+    }
+
+    function _throwError(RecoverError error) private pure {
+        if (error == RecoverError.NoError) {
+            return; // no error: do nothing
+        } else if (error == RecoverError.InvalidSignature) {
+            revert("ECDSA: invalid signature");
+        } else if (error == RecoverError.InvalidSignatureLength) {
+            revert("ECDSA: invalid signature length");
+        } else if (error == RecoverError.InvalidSignatureS) {
+            revert("ECDSA: invalid signature 's' value");
+        } else if (error == RecoverError.InvalidSignatureV) {
+            revert("ECDSA: invalid signature 'v' value");
+        }
+    }
+
+    /**
+     * @dev Returns the address that signed a hashed message (`hash`) with
+     * `signature` or error string. This address can then be used for verification purposes.
+     *
+     * The `ecrecover` EVM opcode allows for malleable (non-unique) signatures:
+     * this function rejects them by requiring the `s` value to be in the lower
+     * half order, and the `v` value to be either 27 or 28.
+     *
+     * IMPORTANT: `hash` _must_ be the result of a hash operation for the
+     * verification to be secure: it is possible to craft signatures that
+     * recover to arbitrary addresses for non-hashed data. A safe way to ensure
+     * this is by receiving a hash of the original message (which may otherwise
+     * be too long), and then calling {toEthSignedMessageHash} on it.
+     *
+     * Documentation for signature generation:
+     * - with https://web3js.readthedocs.io/en/v1.3.4/web3-eth-accounts.html#sign[Web3.js]
+     * - with https://docs.ethers.io/v5/api/signer/#Signer-signMessage[ethers]
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(bytes32 hash, bytes memory signature) internal pure returns (address, RecoverError) {
+        // Check the signature length
+        // - case 65: r,s,v signature (standard)
+        // - case 64: r,vs signature (cf https://eips.ethereum.org/EIPS/eip-2098) _Available since v4.1._
+        if (signature.length == 65) {
+            bytes32 r;
+            bytes32 s;
+            uint8 v;
+            // ecrecover takes the signature parameters, and the only way to get them
+            // currently is to use assembly.
+            assembly {
+                r := mload(add(signature, 0x20))
+                s := mload(add(signature, 0x40))
+                v := byte(0, mload(add(signature, 0x60)))
+            }
+            return tryRecover(hash, v, r, s);
+        } else if (signature.length == 64) {
+            bytes32 r;
+            bytes32 vs;
+            // ecrecover takes the signature parameters, and the only way to get them
+            // currently is to use assembly.
+            assembly {
+                r := mload(add(signature, 0x20))
+                vs := mload(add(signature, 0x40))
+            }
+            return tryRecover(hash, r, vs);
+        } else {
+            return (address(0), RecoverError.InvalidSignatureLength);
+        }
+    }
+
+    /**
+     * @dev Returns the address that signed a hashed message (`hash`) with
+     * `signature`. This address can then be used for verification purposes.
+     *
+     * The `ecrecover` EVM opcode allows for malleable (non-unique) signatures:
+     * this function rejects them by requiring the `s` value to be in the lower
+     * half order, and the `v` value to be either 27 or 28.
+     *
+     * IMPORTANT: `hash` _must_ be the result of a hash operation for the
+     * verification to be secure: it is possible to craft signatures that
+     * recover to arbitrary addresses for non-hashed data. A safe way to ensure
+     * this is by receiving a hash of the original message (which may otherwise
+     * be too long), and then calling {toEthSignedMessageHash} on it.
+     */
+    function recover(bytes32 hash, bytes memory signature) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, signature);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Overload of {ECDSA-tryRecover} that receives the `r` and `vs` short-signature fields separately.
+     *
+     * See https://eips.ethereum.org/EIPS/eip-2098[EIP-2098 short signatures]
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(
+        bytes32 hash,
+        bytes32 r,
+        bytes32 vs
+    ) internal pure returns (address, RecoverError) {
+        bytes32 s;
+        uint8 v;
+        assembly {
+            s := and(vs, 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff)
+            v := add(shr(255, vs), 27)
+        }
+        return tryRecover(hash, v, r, s);
+    }
+
+    /**
+     * @dev Overload of {ECDSA-recover} that receives the `r and `vs` short-signature fields separately.
+     *
+     * _Available since v4.2._
+     */
+    function recover(
+        bytes32 hash,
+        bytes32 r,
+        bytes32 vs
+    ) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, r, vs);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Overload of {ECDSA-tryRecover} that receives the `v`,
+     * `r` and `s` signature fields separately.
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal pure returns (address, RecoverError) {
+        // EIP-2 still allows signature malleability for ecrecover(). Remove this possibility and make the signature
+        // unique. Appendix F in the Ethereum Yellow paper (https://ethereum.github.io/yellowpaper/paper.pdf), defines
+        // the valid range for s in (301): 0 < s < secp256k1n ÷ 2 + 1, and for v in (302): v ∈ {27, 28}. Most
+        // signatures from current libraries generate a unique signature with an s-value in the lower half order.
+        //
+        // If your library generates malleable signatures, such as s-values in the upper range, calculate a new s-value
+        // with 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 - s1 and flip v from 27 to 28 or
+        // vice versa. If your library also generates signatures with 0/1 for v instead 27/28, add 27 to v to accept
+        // these malleable signatures as well.
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            return (address(0), RecoverError.InvalidSignatureS);
+        }
+        if (v != 27 && v != 28) {
+            return (address(0), RecoverError.InvalidSignatureV);
+        }
+
+        // If the signature is valid (and not malleable), return the signer address
+        address signer = ecrecover(hash, v, r, s);
+        if (signer == address(0)) {
+            return (address(0), RecoverError.InvalidSignature);
+        }
+
+        return (signer, RecoverError.NoError);
+    }
+
+    /**
+     * @dev Overload of {ECDSA-recover} that receives the `v`,
+     * `r` and `s` signature fields separately.
+     */
+    function recover(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, v, r, s);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Returns an Ethereum Signed Message, created from a `hash`. This
+     * produces hash corresponding to the one signed with the
+     * https://eth.wiki/json-rpc/API#eth_sign[`eth_sign`]
+     * JSON-RPC method as part of EIP-191.
+     *
+     * See {recover}.
+     */
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+        // 32 is the length in bytes of hash,
+        // enforced by the type signature above
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+
+    /**
+     * @dev Returns an Ethereum Signed Typed Data, created from a
+     * `domainSeparator` and a `structHash`. This produces hash corresponding
+     * to the one signed with the
+     * https://eips.ethereum.org/EIPS/eip-712[`eth_signTypedData`]
+     * JSON-RPC method as part of EIP-712.
+     *
+     * See {recover}.
+     */
+    function toTypedDataHash(bytes32 domainSeparator, bytes32 structHash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+}
+
+
+// File @openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev This is a base contract to aid in writing upgradeable contracts, or any kind of contract that will be deployed
+ * behind a proxy. Since a proxied contract can't have a constructor, it's common to move constructor logic to an
+ * external initializer function, usually called `initialize`. It then becomes necessary to protect this initializer
+ * function so it can only be called once. The {initializer} modifier provided by this contract will have this effect.
+ *
+ * TIP: To avoid leaving the proxy in an uninitialized state, the initializer function should be called as early as
+ * possible by providing the encoded function call as the `_data` argument to {ERC1967Proxy-constructor}.
+ *
+ * CAUTION: When used with inheritance, manual care must be taken to not invoke a parent initializer twice, or to ensure
+ * that all initializers are idempotent. This is not verified automatically as constructors are by Solidity.
+ */
+abstract contract Initializable {
+    /**
+     * @dev Indicates that the contract has been initialized.
+     */
+    bool private _initialized;
+
+    /**
+     * @dev Indicates that the contract is in the process of being initialized.
+     */
+    bool private _initializing;
+
+    /**
+     * @dev Modifier to protect an initializer function from being invoked twice.
+     */
+    modifier initializer() {
+        require(_initializing || !_initialized, "Initializable: contract is already initialized");
+
+        bool isTopLevelCall = !_initializing;
+        if (isTopLevelCall) {
+            _initializing = true;
+            _initialized = true;
+        }
+
+        _;
+
+        if (isTopLevelCall) {
+            _initializing = false;
+        }
+    }
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/cryptography/draft-EIP712Upgradeable.sol@v4.3.2
+
+/**
+ * @dev https://eips.ethereum.org/EIPS/eip-712[EIP 712] is a standard for hashing and signing of typed structured data.
+ *
+ * The encoding specified in the EIP is very generic, and such a generic implementation in Solidity is not feasible,
+ * thus this contract does not implement the encoding itself. Protocols need to implement the type-specific encoding
+ * they need in their contracts using a combination of `abi.encode` and `keccak256`.
+ *
+ * This contract implements the EIP 712 domain separator ({_domainSeparatorV4}) that is used as part of the encoding
+ * scheme, and the final step of the encoding to obtain the message digest that is then signed via ECDSA
+ * ({_hashTypedDataV4}).
+ *
+ * The implementation of the domain separator was designed to be as efficient as possible while still properly updating
+ * the chain id to protect against replay attacks on an eventual fork of the chain.
+ *
+ * NOTE: This contract implements the version of the encoding known as "v4", as implemented by the JSON RPC method
+ * https://docs.metamask.io/guide/signing-data.html[`eth_signTypedDataV4` in MetaMask].
+ *
+ * _Available since v3.4._
+ */
+abstract contract EIP712Upgradeable is Initializable {
+    /* solhint-disable var-name-mixedcase */
+    bytes32 private _HASHED_NAME;
+    bytes32 private _HASHED_VERSION;
+    bytes32 private constant _TYPE_HASH = keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    /* solhint-enable var-name-mixedcase */
+
+    /**
+     * @dev Initializes the domain separator and parameter caches.
+     *
+     * The meaning of `name` and `version` is specified in
+     * https://eips.ethereum.org/EIPS/eip-712#definition-of-domainseparator[EIP 712]:
+     *
+     * - `name`: the user readable name of the signing domain, i.e. the name of the DApp or the protocol.
+     * - `version`: the current major version of the signing domain.
+     *
+     * NOTE: These parameters cannot be changed except through a xref:learn::upgrading-smart-contracts.adoc[smart
+     * contract upgrade].
+     */
+    function __EIP712_init(string memory name, string memory version) internal initializer {
+        __EIP712_init_unchained(name, version);
+    }
+
+    function __EIP712_init_unchained(string memory name, string memory version) internal initializer {
+        bytes32 hashedName = keccak256(bytes(name));
+        bytes32 hashedVersion = keccak256(bytes(version));
+        _HASHED_NAME = hashedName;
+        _HASHED_VERSION = hashedVersion;
+    }
+
+    /**
+     * @dev Returns the domain separator for the current chain.
+     */
+    function _domainSeparatorV4() internal view returns (bytes32) {
+        return _buildDomainSeparator(_TYPE_HASH, _EIP712NameHash(), _EIP712VersionHash());
+    }
+
+    function _buildDomainSeparator(
+        bytes32 typeHash,
+        bytes32 nameHash,
+        bytes32 versionHash
+    ) private view returns (bytes32) {
+        return keccak256(abi.encode(typeHash, nameHash, versionHash, block.chainid, address(this)));
+    }
+
+    /**
+     * @dev Given an already https://eips.ethereum.org/EIPS/eip-712#definition-of-hashstruct[hashed struct], this
+     * function returns the hash of the fully encoded EIP712 message for this domain.
+     *
+     * This hash can be used together with {ECDSA-recover} to obtain the signer of a message. For example:
+     *
+     * ```solidity
+     * bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+     *     keccak256("Mail(address to,string contents)"),
+     *     mailTo,
+     *     keccak256(bytes(mailContents))
+     * )));
+     * address signer = ECDSA.recover(digest, signature);
+     * ```
+     */
+    function _hashTypedDataV4(bytes32 structHash) internal view virtual returns (bytes32) {
+        return ECDSAUpgradeable.toTypedDataHash(_domainSeparatorV4(), structHash);
+    }
+
+    /**
+     * @dev The hash of the name parameter for the EIP712 domain.
+     *
+     * NOTE: This function reads from storage by default, but can be redefined to return a constant value if gas costs
+     * are a concern.
+     */
+    function _EIP712NameHash() internal virtual view returns (bytes32) {
+        return _HASHED_NAME;
+    }
+
+    /**
+     * @dev The hash of the version parameter for the EIP712 domain.
+     *
+     * NOTE: This function reads from storage by default, but can be redefined to return a constant value if gas costs
+     * are a concern.
+     */
+    function _EIP712VersionHash() internal virtual view returns (bytes32) {
+        return _HASHED_VERSION;
+    }
+    uint256[50] private __gap;
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/introspection/IERC165Upgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Interface of the ERC165 standard, as defined in the
+ * https://eips.ethereum.org/EIPS/eip-165[EIP].
+ *
+ * Implementers can declare support of contract interfaces, which can then be
+ * queried by others ({ERC165Checker}).
+ *
+ * For an implementation, see {ERC165}.
+ */
+interface IERC165Upgradeable {
+    /**
+     * @dev Returns true if this contract implements the interface defined by
+     * `interfaceId`. See the corresponding
+     * https://eips.ethereum.org/EIPS/eip-165#how-interfaces-are-identified[EIP section]
+     * to learn more about how these ids are created.
+     *
+     * This function call must use less than 30 000 gas.
+     */
+    function supportsInterface(bytes4 interfaceId) external view returns (bool);
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/introspection/ERC165CheckerUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Library used to query support of an interface declared via {IERC165}.
+ *
+ * Note that these functions return the actual result of the query: they do not
+ * `revert` if an interface is not supported. It is up to the caller to decide
+ * what to do in these cases.
+ */
+library ERC165CheckerUpgradeable {
+    // As per the EIP-165 spec, no interface should ever match 0xffffffff
+    bytes4 private constant _INTERFACE_ID_INVALID = 0xffffffff;
+
+    /**
+     * @dev Returns true if `account` supports the {IERC165} interface,
+     */
+    function supportsERC165(address account) internal view returns (bool) {
+        // Any contract that implements ERC165 must explicitly indicate support of
+        // InterfaceId_ERC165 and explicitly indicate non-support of InterfaceId_Invalid
+        return
+            _supportsERC165Interface(account, type(IERC165Upgradeable).interfaceId) &&
+            !_supportsERC165Interface(account, _INTERFACE_ID_INVALID);
+    }
+
+    /**
+     * @dev Returns true if `account` supports the interface defined by
+     * `interfaceId`. Support for {IERC165} itself is queried automatically.
+     *
+     * See {IERC165-supportsInterface}.
+     */
+    function supportsInterface(address account, bytes4 interfaceId) internal view returns (bool) {
+        // query support of both ERC165 as per the spec and support of _interfaceId
+        return supportsERC165(account) && _supportsERC165Interface(account, interfaceId);
+    }
+
+    /**
+     * @dev Returns a boolean array where each value corresponds to the
+     * interfaces passed in and whether they're supported or not. This allows
+     * you to batch check interfaces for a contract where your expectation
+     * is that some interfaces may not be supported.
+     *
+     * See {IERC165-supportsInterface}.
+     *
+     * _Available since v3.4._
+     */
+    function getSupportedInterfaces(address account, bytes4[] memory interfaceIds)
+        internal
+        view
+        returns (bool[] memory)
+    {
+        // an array of booleans corresponding to interfaceIds and whether they're supported or not
+        bool[] memory interfaceIdsSupported = new bool[](interfaceIds.length);
+
+        // query support of ERC165 itself
+        if (supportsERC165(account)) {
+            // query support of each interface in interfaceIds
+            for (uint256 i = 0; i < interfaceIds.length; i++) {
+                interfaceIdsSupported[i] = _supportsERC165Interface(account, interfaceIds[i]);
+            }
+        }
+
+        return interfaceIdsSupported;
+    }
+
+    /**
+     * @dev Returns true if `account` supports all the interfaces defined in
+     * `interfaceIds`. Support for {IERC165} itself is queried automatically.
+     *
+     * Batch-querying can lead to gas savings by skipping repeated checks for
+     * {IERC165} support.
+     *
+     * See {IERC165-supportsInterface}.
+     */
+    function supportsAllInterfaces(address account, bytes4[] memory interfaceIds) internal view returns (bool) {
+        // query support of ERC165 itself
+        if (!supportsERC165(account)) {
+            return false;
+        }
+
+        // query support of each interface in _interfaceIds
+        for (uint256 i = 0; i < interfaceIds.length; i++) {
+            if (!_supportsERC165Interface(account, interfaceIds[i])) {
+                return false;
+            }
+        }
+
+        // all interfaces supported
+        return true;
+    }
+
+    /**
+     * @notice Query if a contract implements an interface, does not check ERC165 support
+     * @param account The address of the contract to query for support of an interface
+     * @param interfaceId The interface identifier, as specified in ERC-165
+     * @return true if the contract at account indicates support of the interface with
+     * identifier interfaceId, false otherwise
+     * @dev Assumes that account contains a contract that supports ERC165, otherwise
+     * the behavior of this method is undefined. This precondition can be checked
+     * with {supportsERC165}.
+     * Interface identification is specified in ERC-165.
+     */
+    function _supportsERC165Interface(address account, bytes4 interfaceId) private view returns (bool) {
+        bytes memory encodedParams = abi.encodeWithSelector(IERC165Upgradeable.supportsInterface.selector, interfaceId);
+        (bool success, bytes memory result) = account.staticcall{gas: 30000}(encodedParams);
+        if (result.length < 32) return false;
+        return success && abi.decode(result, (bool));
+    }
+}
+
+
+// File @ew-did-registry/proxyidentity/contracts/IOwned.sol@v0.6.2
+
+pragma solidity >0.6.0 <0.9.0;
+
+interface IOwned {
+  function owner() external returns (address);
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Provides information about the current execution context, including the
+ * sender of the transaction and its data. While these are generally available
+ * via msg.sender and msg.data, they should not be accessed in such a direct
+ * manner, since when dealing with meta-transactions the account sending and
+ * paying for execution may not be the actual sender (as far as an application
+ * is concerned).
+ *
+ * This contract is only required for intermediate, library-like contracts.
+ */
+abstract contract ContextUpgradeable is Initializable {
+    function __Context_init() internal initializer {
+        __Context_init_unchained();
+    }
+
+    function __Context_init_unchained() internal initializer {
+    }
+    function _msgSender() internal view virtual returns (address) {
+        return msg.sender;
+    }
+
+    function _msgData() internal view virtual returns (bytes calldata) {
+        return msg.data;
+    }
+    uint256[50] private __gap;
+}
+
+
+// File @openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
+ *
+ * By default, the owner account will be the one that deploys the contract. This
+ * can later be changed with {transferOwnership}.
+ *
+ * This module is used through inheritance. It will make available the modifier
+ * `onlyOwner`, which can be applied to your functions to restrict their use to
+ * the owner.
+ */
+abstract contract OwnableUpgradeable is Initializable, ContextUpgradeable {
+    address private _owner;
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
+    /**
+     * @dev Initializes the contract setting the deployer as the initial owner.
+     */
+    function __Ownable_init() internal initializer {
+        __Context_init_unchained();
+        __Ownable_init_unchained();
+    }
+
+    function __Ownable_init_unchained() internal initializer {
+        _setOwner(_msgSender());
+    }
+
+    /**
+     * @dev Returns the address of the current owner.
+     */
+    function owner() public view virtual returns (address) {
+        return _owner;
+    }
+
+    /**
+     * @dev Throws if called by any account other than the owner.
+     */
+    modifier onlyOwner() {
+        require(owner() == _msgSender(), "Ownable: caller is not the owner");
+        _;
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call
+     * `onlyOwner` functions anymore. Can only be called by the current owner.
+     *
+     * NOTE: Renouncing ownership will leave the contract without an owner,
+     * thereby removing any functionality that is only available to the owner.
+     */
+    function renounceOwnership() public virtual onlyOwner {
+        _setOwner(address(0));
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public virtual onlyOwner {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _setOwner(newOwner);
+    }
+
+    function _setOwner(address newOwner) private {
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
+    }
+    uint256[49] private __gap;
+}
+
+
+// File @openzeppelin/contracts-upgradeable/proxy/beacon/IBeaconUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev This is the interface that {BeaconProxy} expects of its beacon.
+ */
+interface IBeaconUpgradeable {
+    /**
+     * @dev Must return an address that can be used as a delegate call target.
+     *
+     * {BeaconProxy} will check that this address is a contract.
+     */
+    function implementation() external view returns (address);
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/AddressUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Collection of functions related to the address type
+ */
+library AddressUpgradeable {
+    /**
+     * @dev Returns true if `account` is a contract.
+     *
+     * [IMPORTANT]
+     * ====
+     * It is unsafe to assume that an address for which this function returns
+     * false is an externally-owned account (EOA) and not a contract.
+     *
+     * Among others, `isContract` will return false for the following
+     * types of addresses:
+     *
+     *  - an externally-owned account
+     *  - a contract in construction
+     *  - an address where a contract will be created
+     *  - an address where a contract lived, but was destroyed
+     * ====
+     */
+    function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize, which returns 0 for contracts in
+        // construction, since the code is only stored at the end of the
+        // constructor execution.
+
+        uint256 size;
+        assembly {
+            size := extcodesize(account)
+        }
+        return size > 0;
+    }
+
+    /**
+     * @dev Replacement for Solidity's `transfer`: sends `amount` wei to
+     * `recipient`, forwarding all available gas and reverting on errors.
+     *
+     * https://eips.ethereum.org/EIPS/eip-1884[EIP1884] increases the gas cost
+     * of certain opcodes, possibly making contracts go over the 2300 gas limit
+     * imposed by `transfer`, making them unable to receive funds via
+     * `transfer`. {sendValue} removes this limitation.
+     *
+     * https://diligence.consensys.net/posts/2019/09/stop-using-soliditys-transfer-now/[Learn more].
+     *
+     * IMPORTANT: because control is transferred to `recipient`, care must be
+     * taken to not create reentrancy vulnerabilities. Consider using
+     * {ReentrancyGuard} or the
+     * https://solidity.readthedocs.io/en/v0.5.11/security-considerations.html#use-the-checks-effects-interactions-pattern[checks-effects-interactions pattern].
+     */
+    function sendValue(address payable recipient, uint256 amount) internal {
+        require(address(this).balance >= amount, "Address: insufficient balance");
+
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "Address: unable to send value, recipient may have reverted");
+    }
+
+    /**
+     * @dev Performs a Solidity function call using a low level `call`. A
+     * plain `call` is an unsafe replacement for a function call: use this
+     * function instead.
+     *
+     * If `target` reverts with a revert reason, it is bubbled up by this
+     * function (like regular Solidity function calls).
+     *
+     * Returns the raw returned data. To convert to the expected return value,
+     * use https://solidity.readthedocs.io/en/latest/units-and-global-variables.html?highlight=abi.decode#abi-encoding-and-decoding-functions[`abi.decode`].
+     *
+     * Requirements:
+     *
+     * - `target` must be a contract.
+     * - calling `target` with `data` must not revert.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(address target, bytes memory data) internal returns (bytes memory) {
+        return functionCall(target, data, "Address: low-level call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`], but with
+     * `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, 0, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but also transferring `value` wei to `target`.
+     *
+     * Requirements:
+     *
+     * - the calling contract must have an ETH balance of at least `value`.
+     * - the called Solidity function must be `payable`.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value
+    ) internal returns (bytes memory) {
+        return functionCallWithValue(target, data, value, "Address: low-level call with value failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCallWithValue-address-bytes-uint256-}[`functionCallWithValue`], but
+     * with `errorMessage` as a fallback revert reason when `target` reverts.
+     *
+     * _Available since v3.1._
+     */
+    function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(address target, bytes memory data) internal view returns (bytes memory) {
+        return functionStaticCall(target, data, "Address: low-level static call failed");
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a static call.
+     *
+     * _Available since v3.3._
+     */
+    function functionStaticCall(
+        address target,
+        bytes memory data,
+        string memory errorMessage
+    ) internal view returns (bytes memory) {
+        require(isContract(target), "Address: static call to non-contract");
+
+        (bool success, bytes memory returndata) = target.staticcall(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+    /**
+     * @dev Tool to verifies that a low level call was successful, and revert if it wasn't, either by bubbling the
+     * revert reason using the provided one.
+     *
+     * _Available since v4.3._
+     */
+    function verifyCallResult(
+        bool success,
+        bytes memory returndata,
+        string memory errorMessage
+    ) internal pure returns (bytes memory) {
+        if (success) {
+            return returndata;
+        } else {
+            // Look for revert reason and bubble it up if present
+            if (returndata.length > 0) {
+                // The easiest way to bubble the revert reason is using memory via assembly
+
+                assembly {
+                    let returndata_size := mload(returndata)
+                    revert(add(32, returndata), returndata_size)
+                }
+            } else {
+                revert(errorMessage);
+            }
+        }
+    }
+}
+
+
+// File @openzeppelin/contracts-upgradeable/utils/StorageSlotUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+/**
+ * @dev Library for reading and writing primitive types to specific storage slots.
+ *
+ * Storage slots are often used to avoid storage conflict when dealing with upgradeable contracts.
+ * This library helps with reading and writing to such slots without the need for inline assembly.
+ *
+ * The functions in this library return Slot structs that contain a `value` member that can be used to read or write.
+ *
+ * Example usage to set ERC1967 implementation slot:
+ * ```
+ * contract ERC1967 {
+ *     bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+ *
+ *     function _getImplementation() internal view returns (address) {
+ *         return StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+ *     }
+ *
+ *     function _setImplementation(address newImplementation) internal {
+ *         require(Address.isContract(newImplementation), "ERC1967: new implementation is not a contract");
+ *         StorageSlot.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
+ *     }
+ * }
+ * ```
+ *
+ * _Available since v4.1 for `address`, `bool`, `bytes32`, and `uint256`._
+ */
+library StorageSlotUpgradeable {
+    struct AddressSlot {
+        address value;
+    }
+
+    struct BooleanSlot {
+        bool value;
+    }
+
+    struct Bytes32Slot {
+        bytes32 value;
+    }
+
+    struct Uint256Slot {
+        uint256 value;
+    }
+
+    /**
+     * @dev Returns an `AddressSlot` with member `value` located at `slot`.
+     */
+    function getAddressSlot(bytes32 slot) internal pure returns (AddressSlot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `BooleanSlot` with member `value` located at `slot`.
+     */
+    function getBooleanSlot(bytes32 slot) internal pure returns (BooleanSlot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Bytes32Slot` with member `value` located at `slot`.
+     */
+    function getBytes32Slot(bytes32 slot) internal pure returns (Bytes32Slot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+
+    /**
+     * @dev Returns an `Uint256Slot` with member `value` located at `slot`.
+     */
+    function getUint256Slot(bytes32 slot) internal pure returns (Uint256Slot storage r) {
+        assembly {
+            r.slot := slot
+        }
+    }
+}
+
+
+// File @openzeppelin/contracts-upgradeable/proxy/ERC1967/ERC1967UpgradeUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+
+
+
+/**
+ * @dev This abstract contract provides getters and event emitting update functions for
+ * https://eips.ethereum.org/EIPS/eip-1967[EIP1967] slots.
+ *
+ * _Available since v4.1._
+ *
+ * @custom:oz-upgrades-unsafe-allow delegatecall
+ */
+abstract contract ERC1967UpgradeUpgradeable is Initializable {
+    function __ERC1967Upgrade_init() internal initializer {
+        __ERC1967Upgrade_init_unchained();
+    }
+
+    function __ERC1967Upgrade_init_unchained() internal initializer {
+    }
+    // This is the keccak-256 hash of "eip1967.proxy.rollback" subtracted by 1
+    bytes32 private constant _ROLLBACK_SLOT = 0x4910fdfa16fed3260ed0e7147f7cc6da11a60208b5b9406d12a635614ffd9143;
+
+    /**
+     * @dev Storage slot with the address of the current implementation.
+     * This is the keccak-256 hash of "eip1967.proxy.implementation" subtracted by 1, and is
+     * validated in the constructor.
+     */
+    bytes32 internal constant _IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+
+    /**
+     * @dev Emitted when the implementation is upgraded.
+     */
+    event Upgraded(address indexed implementation);
+
+    /**
+     * @dev Returns the current implementation address.
+     */
+    function _getImplementation() internal view returns (address) {
+        return StorageSlotUpgradeable.getAddressSlot(_IMPLEMENTATION_SLOT).value;
+    }
+
+    /**
+     * @dev Stores a new address in the EIP1967 implementation slot.
+     */
+    function _setImplementation(address newImplementation) private {
+        require(AddressUpgradeable.isContract(newImplementation), "ERC1967: new implementation is not a contract");
+        StorageSlotUpgradeable.getAddressSlot(_IMPLEMENTATION_SLOT).value = newImplementation;
+    }
+
+    /**
+     * @dev Perform implementation upgrade
+     *
+     * Emits an {Upgraded} event.
+     */
+    function _upgradeTo(address newImplementation) internal {
+        _setImplementation(newImplementation);
+        emit Upgraded(newImplementation);
+    }
+
+    /**
+     * @dev Perform implementation upgrade with additional setup call.
+     *
+     * Emits an {Upgraded} event.
+     */
+    function _upgradeToAndCall(
+        address newImplementation,
+        bytes memory data,
+        bool forceCall
+    ) internal {
+        _upgradeTo(newImplementation);
+        if (data.length > 0 || forceCall) {
+            _functionDelegateCall(newImplementation, data);
+        }
+    }
+
+    /**
+     * @dev Perform implementation upgrade with security checks for UUPS proxies, and additional setup call.
+     *
+     * Emits an {Upgraded} event.
+     */
+    function _upgradeToAndCallSecure(
+        address newImplementation,
+        bytes memory data,
+        bool forceCall
+    ) internal {
+        address oldImplementation = _getImplementation();
+
+        // Initial upgrade and setup call
+        _setImplementation(newImplementation);
+        if (data.length > 0 || forceCall) {
+            _functionDelegateCall(newImplementation, data);
+        }
+
+        // Perform rollback test if not already in progress
+        StorageSlotUpgradeable.BooleanSlot storage rollbackTesting = StorageSlotUpgradeable.getBooleanSlot(_ROLLBACK_SLOT);
+        if (!rollbackTesting.value) {
+            // Trigger rollback using upgradeTo from the new implementation
+            rollbackTesting.value = true;
+            _functionDelegateCall(
+                newImplementation,
+                abi.encodeWithSignature("upgradeTo(address)", oldImplementation)
+            );
+            rollbackTesting.value = false;
+            // Check rollback was effective
+            require(oldImplementation == _getImplementation(), "ERC1967Upgrade: upgrade breaks further upgrades");
+            // Finally reset to the new implementation and log the upgrade
+            _upgradeTo(newImplementation);
+        }
+    }
+
+    /**
+     * @dev Storage slot with the admin of the contract.
+     * This is the keccak-256 hash of "eip1967.proxy.admin" subtracted by 1, and is
+     * validated in the constructor.
+     */
+    bytes32 internal constant _ADMIN_SLOT = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
+
+    /**
+     * @dev Emitted when the admin account has changed.
+     */
+    event AdminChanged(address previousAdmin, address newAdmin);
+
+    /**
+     * @dev Returns the current admin.
+     */
+    function _getAdmin() internal view returns (address) {
+        return StorageSlotUpgradeable.getAddressSlot(_ADMIN_SLOT).value;
+    }
+
+    /**
+     * @dev Stores a new address in the EIP1967 admin slot.
+     */
+    function _setAdmin(address newAdmin) private {
+        require(newAdmin != address(0), "ERC1967: new admin is the zero address");
+        StorageSlotUpgradeable.getAddressSlot(_ADMIN_SLOT).value = newAdmin;
+    }
+
+    /**
+     * @dev Changes the admin of the proxy.
+     *
+     * Emits an {AdminChanged} event.
+     */
+    function _changeAdmin(address newAdmin) internal {
+        emit AdminChanged(_getAdmin(), newAdmin);
+        _setAdmin(newAdmin);
+    }
+
+    /**
+     * @dev The storage slot of the UpgradeableBeacon contract which defines the implementation for this proxy.
+     * This is bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1)) and is validated in the constructor.
+     */
+    bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
+
+    /**
+     * @dev Emitted when the beacon is upgraded.
+     */
+    event BeaconUpgraded(address indexed beacon);
+
+    /**
+     * @dev Returns the current beacon.
+     */
+    function _getBeacon() internal view returns (address) {
+        return StorageSlotUpgradeable.getAddressSlot(_BEACON_SLOT).value;
+    }
+
+    /**
+     * @dev Stores a new beacon in the EIP1967 beacon slot.
+     */
+    function _setBeacon(address newBeacon) private {
+        require(AddressUpgradeable.isContract(newBeacon), "ERC1967: new beacon is not a contract");
+        require(
+            AddressUpgradeable.isContract(IBeaconUpgradeable(newBeacon).implementation()),
+            "ERC1967: beacon implementation is not a contract"
+        );
+        StorageSlotUpgradeable.getAddressSlot(_BEACON_SLOT).value = newBeacon;
+    }
+
+    /**
+     * @dev Perform beacon upgrade with additional setup call. Note: This upgrades the address of the beacon, it does
+     * not upgrade the implementation contained in the beacon (see {UpgradeableBeacon-_setImplementation} for that).
+     *
+     * Emits a {BeaconUpgraded} event.
+     */
+    function _upgradeBeaconToAndCall(
+        address newBeacon,
+        bytes memory data,
+        bool forceCall
+    ) internal {
+        _setBeacon(newBeacon);
+        emit BeaconUpgraded(newBeacon);
+        if (data.length > 0 || forceCall) {
+            _functionDelegateCall(IBeaconUpgradeable(newBeacon).implementation(), data);
+        }
+    }
+
+    /**
+     * @dev Same as {xref-Address-functionCall-address-bytes-string-}[`functionCall`],
+     * but performing a delegate call.
+     *
+     * _Available since v3.4._
+     */
+    function _functionDelegateCall(address target, bytes memory data) private returns (bytes memory) {
+        require(AddressUpgradeable.isContract(target), "Address: delegate call to non-contract");
+
+        // solhint-disable-next-line avoid-low-level-calls
+        (bool success, bytes memory returndata) = target.delegatecall(data);
+        return AddressUpgradeable.verifyCallResult(success, returndata, "Address: low-level delegate call failed");
+    }
+    uint256[50] private __gap;
+}
+
+
+// File @openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol@v4.3.2
+
+pragma solidity ^0.8.6;
+
+
+/**
+ * @dev An upgradeability mechanism designed for UUPS proxies. The functions included here can perform an upgrade of an
+ * {ERC1967Proxy}, when this contract is set as the implementation behind such a proxy.
+ *
+ * A security mechanism ensures that an upgrade does not turn off upgradeability accidentally, although this risk is
+ * reinstated if the upgrade retains upgradeability but removes the security mechanism, e.g. by replacing
+ * `UUPSUpgradeable` with a custom implementation of upgrades.
+ *
+ * The {_authorizeUpgrade} function must be overridden to include access restriction to the upgrade mechanism.
+ *
+ * _Available since v4.1._
+ */
+abstract contract UUPSUpgradeable is Initializable, ERC1967UpgradeUpgradeable {
+    function __UUPSUpgradeable_init() internal initializer {
+        __ERC1967Upgrade_init_unchained();
+        __UUPSUpgradeable_init_unchained();
+    }
+
+    function __UUPSUpgradeable_init_unchained() internal initializer {
+    }
+    /// @custom:oz-upgrades-unsafe-allow state-variable-immutable state-variable-assignment
+    address private immutable __self = address(this);
+
+    /**
+     * @dev Check that the execution is being performed through a delegatecall call and that the execution context is
+     * a proxy contract with an implementation (as defined in ERC1967) pointing to self. This should only be the case
+     * for UUPS and transparent proxies that are using the current contract as their implementation. Execution of a
+     * function through ERC1167 minimal proxies (clones) would not normally pass this test, but is not guaranteed to
+     * fail.
+     */
+    modifier onlyProxy() {
+        require(address(this) != __self, "Function must be called through delegatecall");
+        require(_getImplementation() == __self, "Function must be called through active proxy");
+        _;
+    }
+
+    /**
+     * @dev Upgrade the implementation of the proxy to `newImplementation`.
+     *
+     * Calls {_authorizeUpgrade}.
+     *
+     * Emits an {Upgraded} event.
+     */
+    function upgradeTo(address newImplementation) external virtual onlyProxy {
+        _authorizeUpgrade(newImplementation);
+        _upgradeToAndCallSecure(newImplementation, new bytes(0), false);
+    }
+
+    /**
+     * @dev Upgrade the implementation of the proxy to `newImplementation`, and subsequently execute the function call
+     * encoded in `data`.
+     *
+     * Calls {_authorizeUpgrade}.
+     *
+     * Emits an {Upgraded} event.
+     */
+    function upgradeToAndCall(address newImplementation, bytes memory data) external payable virtual onlyProxy {
+        _authorizeUpgrade(newImplementation);
+        _upgradeToAndCallSecure(newImplementation, data, true);
+    }
+
+    /**
+     * @dev Function that should revert when `msg.sender` is not authorized to upgrade the contract. Called by
+     * {upgradeTo} and {upgradeToAndCall}.
+     *
+     * Normally, this function will use an xref:access.adoc[access control] modifier such as {Ownable-onlyOwner}.
+     *
+     * ```solidity
+     * function _authorizeUpgrade(address) internal override onlyOwner {}
+     * ```
+     */
+    function _authorizeUpgrade(address newImplementation) internal virtual;
+    uint256[50] private __gap;
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/ResolverBase.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+abstract contract ResolverBase {
+    bytes4 private constant INTERFACE_META_ID = 0x01ffc9a7;
+
+    function supportsInterface(bytes4 interfaceID) virtual public pure returns(bool) {
+        return interfaceID == INTERFACE_META_ID;
+    }
+
+    function isAuthorised(bytes32 node) internal virtual view returns(bool);
+
+    modifier authorised(bytes32 node) {
+        require(isAuthorised(node));
+        _;
+    }
+
+    function bytesToAddress(bytes memory b) internal pure returns(address payable a) {
+        require(b.length == 20);
+        assembly {
+            a := div(mload(add(b, 32)), exp(256, 12))
+        }
+    }
+
+    function addressToBytes(address a) internal pure returns(bytes memory b) {
+        b = new bytes(20);
+        assembly {
+            mstore(add(b, 32), mul(a, exp(256, 12)))
+        }
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/ABIResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract ABIResolver is ResolverBase {
+    bytes4 constant private ABI_INTERFACE_ID = 0x2203ab56;
+
+    event ABIChanged(bytes32 indexed node, uint256 indexed contentType);
+
+    mapping(bytes32=>mapping(uint256=>bytes)) abis;
+
+    /**
+     * Sets the ABI associated with an ENS node.
+     * Nodes may have one ABI of each content type. To remove an ABI, set it to
+     * the empty string.
+     * @param node The node to update.
+     * @param contentType The content type of the ABI
+     * @param data The ABI data.
+     */
+    function setABI(bytes32 node, uint256 contentType, bytes calldata data) external authorised(node) {
+        // Content types must be powers of 2
+        require(((contentType - 1) & contentType) == 0);
+
+        abis[node][contentType] = data;
+        emit ABIChanged(node, contentType);
+    }
+
+    /**
+     * Returns the ABI associated with an ENS node.
+     * Defined in EIP205.
+     * @param node The ENS node to query
+     * @param contentTypes A bitwise OR of the ABI formats accepted by the caller.
+     * @return contentType The content type of the return value
+     * @return data The ABI data
+     */
+    function ABI(bytes32 node, uint256 contentTypes) external view returns (uint256, bytes memory) {
+        mapping(uint256=>bytes) storage abiset = abis[node];
+
+        for (uint256 contentType = 1; contentType <= contentTypes; contentType <<= 1) {
+            if ((contentType & contentTypes) != 0 && abiset[contentType].length > 0) {
+                return (contentType, abiset[contentType]);
+            }
+        }
+
+        return (0, bytes(""));
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == ABI_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/AddrResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract AddrResolver is ResolverBase {
+    bytes4 constant private ADDR_INTERFACE_ID = 0x3b3b57de;
+    bytes4 constant private ADDRESS_INTERFACE_ID = 0xf1cb7e06;
+    uint constant private COIN_TYPE_ETH = 60;
+
+    event AddrChanged(bytes32 indexed node, address a);
+    event AddressChanged(bytes32 indexed node, uint coinType, bytes newAddress);
+
+    mapping(bytes32=>mapping(uint=>bytes)) _addresses;
+
+    /**
+     * Sets the address associated with an ENS node.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param a The address to set.
+     */
+    function setAddr(bytes32 node, address a) external authorised(node) {
+        setAddr(node, COIN_TYPE_ETH, addressToBytes(a));
+    }
+
+    /**
+     * Returns the address associated with an ENS node.
+     * @param node The ENS node to query.
+     * @return The associated address.
+     */
+    function addr(bytes32 node) public view returns (address payable) {
+        bytes memory a = addr(node, COIN_TYPE_ETH);
+        if(a.length == 0) {
+            return payable(0);
+        }
+        return bytesToAddress(a);
+    }
+
+    function setAddr(bytes32 node, uint coinType, bytes memory a) public authorised(node) {
+        emit AddressChanged(node, coinType, a);
+        if(coinType == COIN_TYPE_ETH) {
+            emit AddrChanged(node, bytesToAddress(a));
+        }
+        _addresses[node][coinType] = a;
+    }
+
+    function addr(bytes32 node, uint coinType) public view returns(bytes memory) {
+        return _addresses[node][coinType];
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == ADDR_INTERFACE_ID || interfaceID == ADDRESS_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/ContentHashResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract ContentHashResolver is ResolverBase {
+    bytes4 constant private CONTENT_HASH_INTERFACE_ID = 0xbc1c58d1;
+
+    event ContenthashChanged(bytes32 indexed node, bytes hash);
+
+    mapping(bytes32=>bytes) hashes;
+
+    /**
+     * Sets the contenthash associated with an ENS node.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param hash The contenthash to set
+     */
+    function setContenthash(bytes32 node, bytes calldata hash) external authorised(node) {
+        hashes[node] = hash;
+        emit ContenthashChanged(node, hash);
+    }
+
+    /**
+     * Returns the contenthash associated with an ENS node.
+     * @param node The ENS node to query.
+     * @return The associated contenthash.
+     */
+    function contenthash(bytes32 node) external view returns (bytes memory) {
+        return hashes[node];
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == CONTENT_HASH_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/dnssec-oracle/BytesUtils.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+library BytesUtils {
+    /*
+    * @dev Returns the keccak-256 hash of a byte range.
+    * @param self The byte string to hash.
+    * @param offset The position to start hashing at.
+    * @param len The number of bytes to hash.
+    * @return The hash of the byte range.
+    */
+    function keccak(bytes memory self, uint offset, uint len) internal pure returns (bytes32 ret) {
+        require(offset + len <= self.length);
+        assembly {
+            ret := keccak256(add(add(self, 32), offset), len)
+        }
+    }
+
+
+    /*
+    * @dev Returns a positive number if `other` comes lexicographically after
+    *      `self`, a negative number if it comes before, or zero if the
+    *      contents of the two bytes are equal.
+    * @param self The first bytes to compare.
+    * @param other The second bytes to compare.
+    * @return The result of the comparison.
+    */
+    function compare(bytes memory self, bytes memory other) internal pure returns (int) {
+        return compare(self, 0, self.length, other, 0, other.length);
+    }
+
+    /*
+    * @dev Returns a positive number if `other` comes lexicographically after
+    *      `self`, a negative number if it comes before, or zero if the
+    *      contents of the two bytes are equal. Comparison is done per-rune,
+    *      on unicode codepoints.
+    * @param self The first bytes to compare.
+    * @param offset The offset of self.
+    * @param len    The length of self.
+    * @param other The second bytes to compare.
+    * @param otheroffset The offset of the other string.
+    * @param otherlen    The length of the other string.
+    * @return The result of the comparison.
+    */
+    function compare(bytes memory self, uint offset, uint len, bytes memory other, uint otheroffset, uint otherlen) internal pure returns (int) {
+        uint shortest = len;
+        if (otherlen < len)
+        shortest = otherlen;
+
+        uint selfptr;
+        uint otherptr;
+
+        assembly {
+            selfptr := add(self, add(offset, 32))
+            otherptr := add(other, add(otheroffset, 32))
+        }
+        for (uint idx = 0; idx < shortest; idx += 32) {
+            uint a;
+            uint b;
+            assembly {
+                a := mload(selfptr)
+                b := mload(otherptr)
+            }
+            if (a != b) {
+                // Mask out irrelevant bytes and check again
+                uint mask;
+                if (shortest > 32) {
+                    mask = type(uint256).max;
+                } else {
+                    mask = ~(2 ** (8 * (32 - shortest + idx)) - 1);
+                }
+                int diff = int(a & mask) - int(b & mask);
+                if (diff != 0)
+                return diff;
+            }
+            selfptr += 32;
+            otherptr += 32;
+        }
+
+        return int(len) - int(otherlen);
+    }
+
+    /*
+    * @dev Returns true if the two byte ranges are equal.
+    * @param self The first byte range to compare.
+    * @param offset The offset into the first byte range.
+    * @param other The second byte range to compare.
+    * @param otherOffset The offset into the second byte range.
+    * @param len The number of bytes to compare
+    * @return True if the byte ranges are equal, false otherwise.
+    */
+    function equals(bytes memory self, uint offset, bytes memory other, uint otherOffset, uint len) internal pure returns (bool) {
+        return keccak(self, offset, len) == keccak(other, otherOffset, len);
+    }
+
+    /*
+    * @dev Returns true if the two byte ranges are equal with offsets.
+    * @param self The first byte range to compare.
+    * @param offset The offset into the first byte range.
+    * @param other The second byte range to compare.
+    * @param otherOffset The offset into the second byte range.
+    * @return True if the byte ranges are equal, false otherwise.
+    */
+    function equals(bytes memory self, uint offset, bytes memory other, uint otherOffset) internal pure returns (bool) {
+        return keccak(self, offset, self.length - offset) == keccak(other, otherOffset, other.length - otherOffset);
+    }
+
+    /*
+    * @dev Compares a range of 'self' to all of 'other' and returns True iff
+    *      they are equal.
+    * @param self The first byte range to compare.
+    * @param offset The offset into the first byte range.
+    * @param other The second byte range to compare.
+    * @return True if the byte ranges are equal, false otherwise.
+    */
+    function equals(bytes memory self, uint offset, bytes memory other) internal pure returns (bool) {
+        return self.length >= offset + other.length && equals(self, offset, other, 0, other.length);
+    }
+
+    /*
+    * @dev Returns true if the two byte ranges are equal.
+    * @param self The first byte range to compare.
+    * @param other The second byte range to compare.
+    * @return True if the byte ranges are equal, false otherwise.
+    */
+    function equals(bytes memory self, bytes memory other) internal pure returns(bool) {
+        return self.length == other.length && equals(self, 0, other, 0, self.length);
+    }
+
+    /*
+    * @dev Returns the 8-bit number at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes
+    * @return The specified 8 bits of the string, interpreted as an integer.
+    */
+    function readUint8(bytes memory self, uint idx) internal pure returns (uint8 ret) {
+        return uint8(self[idx]);
+    }
+
+    /*
+    * @dev Returns the 16-bit number at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes
+    * @return The specified 16 bits of the string, interpreted as an integer.
+    */
+    function readUint16(bytes memory self, uint idx) internal pure returns (uint16 ret) {
+        require(idx + 2 <= self.length);
+        assembly {
+            ret := and(mload(add(add(self, 2), idx)), 0xFFFF)
+        }
+    }
+
+    /*
+    * @dev Returns the 32-bit number at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes
+    * @return The specified 32 bits of the string, interpreted as an integer.
+    */
+    function readUint32(bytes memory self, uint idx) internal pure returns (uint32 ret) {
+        require(idx + 4 <= self.length);
+        assembly {
+            ret := and(mload(add(add(self, 4), idx)), 0xFFFFFFFF)
+        }
+    }
+
+    /*
+    * @dev Returns the 32 byte value at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes
+    * @return The specified 32 bytes of the string.
+    */
+    function readBytes32(bytes memory self, uint idx) internal pure returns (bytes32 ret) {
+        require(idx + 32 <= self.length);
+        assembly {
+            ret := mload(add(add(self, 32), idx))
+        }
+    }
+
+    /*
+    * @dev Returns the 32 byte value at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes
+    * @return The specified 32 bytes of the string.
+    */
+    function readBytes20(bytes memory self, uint idx) internal pure returns (bytes20 ret) {
+        require(idx + 20 <= self.length);
+        assembly {
+            ret := and(mload(add(add(self, 32), idx)), 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF000000000000000000000000)
+        }
+    }
+
+    /*
+    * @dev Returns the n byte value at the specified index of self.
+    * @param self The byte string.
+    * @param idx The index into the bytes.
+    * @param len The number of bytes.
+    * @return The specified 32 bytes of the string.
+    */
+    function readBytesN(bytes memory self, uint idx, uint len) internal pure returns (bytes32 ret) {
+        require(len <= 32);
+        require(idx + len <= self.length);
+        assembly {
+            let mask := not(sub(exp(256, sub(32, len)), 1))
+            ret := and(mload(add(add(self, 32), idx)),  mask)
+        }
+    }
+
+    function memcpy(uint dest, uint src, uint len) private pure {
+        // Copy word-length chunks while possible
+        for (; len >= 32; len -= 32) {
+            assembly {
+                mstore(dest, mload(src))
+            }
+            dest += 32;
+            src += 32;
+        }
+
+        // Copy remaining bytes
+        unchecked {
+            uint mask = (256 ** (32 - len)) - 1;
+            assembly {
+                let srcpart := and(mload(src), not(mask))
+                let destpart := and(mload(dest), mask)
+                mstore(dest, or(destpart, srcpart))
+            }
+        }
+    }
+
+    /*
+    * @dev Copies a substring into a new byte string.
+    * @param self The byte string to copy from.
+    * @param offset The offset to start copying at.
+    * @param len The number of bytes to copy.
+    */
+    function substring(bytes memory self, uint offset, uint len) internal pure returns(bytes memory) {
+        require(offset + len <= self.length);
+
+        bytes memory ret = new bytes(len);
+        uint dest;
+        uint src;
+
+        assembly {
+            dest := add(ret, 32)
+            src := add(add(self, 32), offset)
+        }
+        memcpy(dest, src, len);
+
+        return ret;
+    }
+
+    // Maps characters from 0x30 to 0x7A to their base32 values.
+    // 0xFF represents invalid characters in that range.
+    bytes constant base32HexTable = hex'00010203040506070809FFFFFFFFFFFFFF0A0B0C0D0E0F101112131415161718191A1B1C1D1E1FFFFFFFFFFFFFFFFFFFFF0A0B0C0D0E0F101112131415161718191A1B1C1D1E1F';
+
+    /**
+     * @dev Decodes unpadded base32 data of up to one word in length.
+     * @param self The data to decode.
+     * @param off Offset into the string to start at.
+     * @param len Number of characters to decode.
+     * @return The decoded data, left aligned.
+     */
+    function base32HexDecodeWord(bytes memory self, uint off, uint len) internal pure returns(bytes32) {
+        require(len <= 52);
+
+        uint ret = 0;
+        uint8 decoded;
+        for(uint i = 0; i < len; i++) {
+            bytes1 char = self[off + i];
+            require(char >= 0x30 && char <= 0x7A);
+            decoded = uint8(base32HexTable[uint(uint8(char)) - 0x30]);
+            require(decoded <= 0x20);
+            if(i == len - 1) {
+                break;
+            }
+            ret = (ret << 5) | decoded;
+        }
+
+        uint bitlen = len * 5;
+        if(len % 8 == 0) {
+            // Multiple of 8 characters, no padding
+            ret = (ret << 5) | decoded;
+        } else if(len % 8 == 2) {
+            // Two extra characters - 1 byte
+            ret = (ret << 3) | (decoded >> 2);
+            bitlen -= 2;
+        } else if(len % 8 == 4) {
+            // Four extra characters - 2 bytes
+            ret = (ret << 1) | (decoded >> 4);
+            bitlen -= 4;
+        } else if(len % 8 == 5) {
+            // Five extra characters - 3 bytes
+            ret = (ret << 4) | (decoded >> 1);
+            bitlen -= 1;
+        } else if(len % 8 == 7) {
+            // Seven extra characters - 4 bytes
+            ret = (ret << 2) | (decoded >> 3);
+            bitlen -= 3;
+        } else {
+            revert();
+        }
+
+        return bytes32(ret << (256 - bitlen));
+    }
+}
+
+
+// File @ensdomains/buffer/contracts/Buffer.sol@v0.0.13
+
+pragma solidity ^0.8.6;
+
+/**
+* @dev A library for working with mutable byte buffers in Solidity.
+*
+* Byte buffers are mutable and expandable, and provide a variety of primitives
+* for writing to them. At any time you can fetch a bytes object containing the
+* current contents of the buffer. The bytes object should not be stored between
+* operations, as it may change due to resizing of the buffer.
+*/
+library Buffer {
+    /**
+    * @dev Represents a mutable buffer. Buffers have a current value (buf) and
+    *      a capacity. The capacity may be longer than the current value, in
+    *      which case it can be extended without the need to allocate more memory.
+    */
+    struct buffer {
+        bytes buf;
+        uint capacity;
+    }
+
+    /**
+    * @dev Initializes a buffer with an initial capacity.
+    * @param buf The buffer to initialize.
+    * @param capacity The number of bytes of space to allocate the buffer.
+    * @return The buffer, for chaining.
+    */
+    function init(buffer memory buf, uint capacity) internal pure returns(buffer memory) {
+        if (capacity % 32 != 0) {
+            capacity += 32 - (capacity % 32);
+        }
+        // Allocate space for the buffer data
+        buf.capacity = capacity;
+        assembly {
+            let ptr := mload(0x40)
+            mstore(buf, ptr)
+            mstore(ptr, 0)
+            mstore(0x40, add(32, add(ptr, capacity)))
+        }
+        return buf;
+    }
+
+    /**
+    * @dev Initializes a new buffer from an existing bytes object.
+    *      Changes to the buffer may mutate the original value.
+    * @param b The bytes object to initialize the buffer with.
+    * @return A new buffer.
+    */
+    function fromBytes(bytes memory b) internal pure returns(buffer memory) {
+        buffer memory buf;
+        buf.buf = b;
+        buf.capacity = b.length;
+        return buf;
+    }
+
+    function resize(buffer memory buf, uint capacity) private pure {
+        bytes memory oldbuf = buf.buf;
+        init(buf, capacity);
+        append(buf, oldbuf);
+    }
+
+    function max(uint a, uint b) private pure returns(uint) {
+        if (a > b) {
+            return a;
+        }
+        return b;
+    }
+
+    /**
+    * @dev Sets buffer length to 0.
+    * @param buf The buffer to truncate.
+    * @return The original buffer, for chaining..
+    */
+    function truncate(buffer memory buf) internal pure returns (buffer memory) {
+        assembly {
+            let bufptr := mload(buf)
+            mstore(bufptr, 0)
+        }
+        return buf;
+    }
+
+    /**
+    * @dev Writes a byte string to a buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param off The start offset to write to.
+    * @param data The data to append.
+    * @param len The number of bytes to copy.
+    * @return The original buffer, for chaining.
+    */
+    function write(buffer memory buf, uint off, bytes memory data, uint len) internal pure returns(buffer memory) {
+        require(len <= data.length);
+
+        if (off + len > buf.capacity) {
+            resize(buf, max(buf.capacity, len + off) * 2);
+        }
+
+        uint dest;
+        uint src;
+        assembly {
+            // Memory address of the buffer data
+            let bufptr := mload(buf)
+            // Length of existing buffer data
+            let buflen := mload(bufptr)
+            // Start address = buffer address + offset + sizeof(buffer length)
+            dest := add(add(bufptr, 32), off)
+            // Update buffer length if we're extending it
+            if gt(add(len, off), buflen) {
+                mstore(bufptr, add(len, off))
+            }
+            src := add(data, 32)
+        }
+
+        // Copy word-length chunks while possible
+        for (; len >= 32; len -= 32) {
+            assembly {
+                mstore(dest, mload(src))
+            }
+            dest += 32;
+            src += 32;
+        }
+
+        // Copy remaining bytes
+        unchecked {
+            uint mask = (256 ** (32 - len)) - 1;
+            assembly {
+                let srcpart := and(mload(src), not(mask))
+                let destpart := and(mload(dest), mask)
+                mstore(dest, or(destpart, srcpart))
+            }
+        }
+
+        return buf;
+    }
+
+    /**
+    * @dev Appends a byte string to a buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param data The data to append.
+    * @param len The number of bytes to copy.
+    * @return The original buffer, for chaining.
+    */
+    function append(buffer memory buf, bytes memory data, uint len) internal pure returns (buffer memory) {
+        return write(buf, buf.buf.length, data, len);
+    }
+
+    /**
+    * @dev Appends a byte string to a buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param data The data to append.
+    * @return The original buffer, for chaining.
+    */
+    function append(buffer memory buf, bytes memory data) internal pure returns (buffer memory) {
+        return write(buf, buf.buf.length, data, data.length);
+    }
+
+    /**
+    * @dev Writes a byte to the buffer. Resizes if doing so would exceed the
+    *      capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param off The offset to write the byte at.
+    * @param data The data to append.
+    * @return The original buffer, for chaining.
+    */
+    function writeUint8(buffer memory buf, uint off, uint8 data) internal pure returns(buffer memory) {
+        if (off >= buf.capacity) {
+            resize(buf, buf.capacity * 2);
+        }
+
+        assembly {
+            // Memory address of the buffer data
+            let bufptr := mload(buf)
+            // Length of existing buffer data
+            let buflen := mload(bufptr)
+            // Address = buffer address + sizeof(buffer length) + off
+            let dest := add(add(bufptr, off), 32)
+            mstore8(dest, data)
+            // Update buffer length if we extended it
+            if eq(off, buflen) {
+                mstore(bufptr, add(buflen, 1))
+            }
+        }
+        return buf;
+    }
+
+    /**
+    * @dev Appends a byte to the buffer. Resizes if doing so would exceed the
+    *      capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param data The data to append.
+    * @return The original buffer, for chaining.
+    */
+    function appendUint8(buffer memory buf, uint8 data) internal pure returns(buffer memory) {
+        return writeUint8(buf, buf.buf.length, data);
+    }
+
+    /**
+    * @dev Writes up to 32 bytes to the buffer. Resizes if doing so would
+    *      exceed the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param off The offset to write at.
+    * @param data The data to append.
+    * @param len The number of bytes to write (left-aligned).
+    * @return The original buffer, for chaining.
+    */
+    function write(buffer memory buf, uint off, bytes32 data, uint len) private pure returns(buffer memory) {
+        if (len + off > buf.capacity) {
+            resize(buf, (len + off) * 2);
+        }
+
+        unchecked {
+            uint mask = (256 ** len) - 1;
+            // Right-align data
+            data = data >> (8 * (32 - len));
+            assembly {
+                // Memory address of the buffer data
+                let bufptr := mload(buf)
+                // Address = buffer address + sizeof(buffer length) + off + len
+                let dest := add(add(bufptr, off), len)
+                mstore(dest, or(and(mload(dest), not(mask)), data))
+                // Update buffer length if we extended it
+                if gt(add(off, len), mload(bufptr)) {
+                    mstore(bufptr, add(off, len))
+                }
+            }
+        }
+        return buf;
+    }
+
+    /**
+    * @dev Writes a bytes20 to the buffer. Resizes if doing so would exceed the
+    *      capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param off The offset to write at.
+    * @param data The data to append.
+    * @return The original buffer, for chaining.
+    */
+    function writeBytes20(buffer memory buf, uint off, bytes20 data) internal pure returns (buffer memory) {
+        return write(buf, off, bytes32(data), 20);
+    }
+
+    /**
+    * @dev Appends a bytes20 to the buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param data The data to append.
+    * @return The original buffer, for chhaining.
+    */
+    function appendBytes20(buffer memory buf, bytes20 data) internal pure returns (buffer memory) {
+        return write(buf, buf.buf.length, bytes32(data), 20);
+    }
+
+    /**
+    * @dev Appends a bytes32 to the buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param data The data to append.
+    * @return The original buffer, for chaining.
+    */
+    function appendBytes32(buffer memory buf, bytes32 data) internal pure returns (buffer memory) {
+        return write(buf, buf.buf.length, data, 32);
+    }
+
+    /**
+    * @dev Writes an integer to the buffer. Resizes if doing so would exceed
+    *      the capacity of the buffer.
+    * @param buf The buffer to append to.
+    * @param off The offset to write at.
+    * @param data The data to append.
+    * @param len The number of bytes to write (right-aligned).
+    * @return The original buffer, for chaining.
+    */
+    function writeInt(buffer memory buf, uint off, uint data, uint len) private pure returns(buffer memory) {
+        if (len + off > buf.capacity) {
+            resize(buf, (len + off) * 2);
+        }
+
+        uint mask = (256 ** len) - 1;
+        assembly {
+            // Memory address of the buffer data
+            let bufptr := mload(buf)
+            // Address = buffer address + off + sizeof(buffer length) + len
+            let dest := add(add(bufptr, off), len)
+            mstore(dest, or(and(mload(dest), not(mask)), data))
+            // Update buffer length if we extended it
+            if gt(add(off, len), mload(bufptr)) {
+                mstore(bufptr, add(off, len))
+            }
+        }
+        return buf;
+    }
+
+    /**
+     * @dev Appends a byte to the end of the buffer. Resizes if doing so would
+     * exceed the capacity of the buffer.
+     * @param buf The buffer to append to.
+     * @param data The data to append.
+     * @return The original buffer.
+     */
+    function appendInt(buffer memory buf, uint data, uint len) internal pure returns(buffer memory) {
+        return writeInt(buf, buf.buf.length, data, len);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/dnssec-oracle/RRUtils.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+
+/**
+* @dev RRUtils is a library that provides utilities for parsing DNS resource records.
+*/
+library RRUtils {
+    using BytesUtils for *;
+    using Buffer for *;
+
+    /**
+    * @dev Returns the number of bytes in the DNS name at 'offset' in 'self'.
+    * @param self The byte array to read a name from.
+    * @param offset The offset to start reading at.
+    * @return The length of the DNS name at 'offset', in bytes.
+    */
+    function nameLength(bytes memory self, uint offset) internal pure returns(uint) {
+        uint idx = offset;
+        while (true) {
+            assert(idx < self.length);
+            uint labelLen = self.readUint8(idx);
+            idx += labelLen + 1;
+            if (labelLen == 0) {
+                break;
+            }
+        }
+        return idx - offset;
+    }
+
+    /**
+    * @dev Returns a DNS format name at the specified offset of self.
+    * @param self The byte array to read a name from.
+    * @param offset The offset to start reading at.
+    * @return ret The name.
+    */
+    function readName(bytes memory self, uint offset) internal pure returns(bytes memory ret) {
+        uint len = nameLength(self, offset);
+        return self.substring(offset, len);
+    }
+
+    /**
+    * @dev Returns the number of labels in the DNS name at 'offset' in 'self'.
+    * @param self The byte array to read a name from.
+    * @param offset The offset to start reading at.
+    * @return The number of labels in the DNS name at 'offset', in bytes.
+    */
+    function labelCount(bytes memory self, uint offset) internal pure returns(uint) {
+        uint count = 0;
+        while (true) {
+            assert(offset < self.length);
+            uint labelLen = self.readUint8(offset);
+            offset += labelLen + 1;
+            if (labelLen == 0) {
+                break;
+            }
+            count += 1;
+        }
+        return count;
+    }
+
+    uint constant RRSIG_TYPE = 0;
+    uint constant RRSIG_ALGORITHM = 2;
+    uint constant RRSIG_LABELS = 3;
+    uint constant RRSIG_TTL = 4;
+    uint constant RRSIG_EXPIRATION = 8;
+    uint constant RRSIG_INCEPTION = 12;
+    uint constant RRSIG_KEY_TAG = 16;
+    uint constant RRSIG_SIGNER_NAME = 18;
+
+    struct SignedSet {
+        uint16 typeCovered;
+        uint8 algorithm;
+        uint8 labels;
+        uint32 ttl;
+        uint32 expiration;
+        uint32 inception;
+        uint16 keytag;
+        bytes signerName;
+        bytes data;
+        bytes name;
+    }
+
+    function readSignedSet(bytes memory data) internal pure returns(SignedSet memory self) {
+        self.typeCovered = data.readUint16(RRSIG_TYPE);
+        self.algorithm = data.readUint8(RRSIG_ALGORITHM);
+        self.labels = data.readUint8(RRSIG_LABELS);
+        self.ttl = data.readUint32(RRSIG_TTL);
+        self.expiration = data.readUint32(RRSIG_EXPIRATION);
+        self.inception = data.readUint32(RRSIG_INCEPTION);
+        self.keytag = data.readUint16(RRSIG_KEY_TAG);
+        self.signerName = readName(data, RRSIG_SIGNER_NAME);
+        self.data = data.substring(RRSIG_SIGNER_NAME + self.signerName.length, data.length - RRSIG_SIGNER_NAME - self.signerName.length);
+    }
+
+    function rrs(SignedSet memory rrset) internal pure returns(RRIterator memory) {
+        return iterateRRs(rrset.data, 0);
+    }
+
+    /**
+    * @dev An iterator over resource records.
+    */
+    struct RRIterator {
+        bytes data;
+        uint offset;
+        uint16 dnstype;
+        uint16 class;
+        uint32 ttl;
+        uint rdataOffset;
+        uint nextOffset;
+    }
+
+    /**
+    * @dev Begins iterating over resource records.
+    * @param self The byte string to read from.
+    * @param offset The offset to start reading at.
+    * @return ret An iterator object.
+    */
+    function iterateRRs(bytes memory self, uint offset) internal pure returns (RRIterator memory ret) {
+        ret.data = self;
+        ret.nextOffset = offset;
+        next(ret);
+    }
+
+    /**
+    * @dev Returns true iff there are more RRs to iterate.
+    * @param iter The iterator to check.
+    * @return True iff the iterator has finished.
+    */
+    function done(RRIterator memory iter) internal pure returns(bool) {
+        return iter.offset >= iter.data.length;
+    }
+
+    /**
+    * @dev Moves the iterator to the next resource record.
+    * @param iter The iterator to advance.
+    */
+    function next(RRIterator memory iter) internal pure {
+        iter.offset = iter.nextOffset;
+        if (iter.offset >= iter.data.length) {
+            return;
+        }
+
+        // Skip the name
+        uint off = iter.offset + nameLength(iter.data, iter.offset);
+
+        // Read type, class, and ttl
+        iter.dnstype = iter.data.readUint16(off);
+        off += 2;
+        iter.class = iter.data.readUint16(off);
+        off += 2;
+        iter.ttl = iter.data.readUint32(off);
+        off += 4;
+
+        // Read the rdata
+        uint rdataLength = iter.data.readUint16(off);
+        off += 2;
+        iter.rdataOffset = off;
+        iter.nextOffset = off + rdataLength;
+    }
+
+    /**
+    * @dev Returns the name of the current record.
+    * @param iter The iterator.
+    * @return A new bytes object containing the owner name from the RR.
+    */
+    function name(RRIterator memory iter) internal pure returns(bytes memory) {
+        return iter.data.substring(iter.offset, nameLength(iter.data, iter.offset));
+    }
+
+    /**
+    * @dev Returns the rdata portion of the current record.
+    * @param iter The iterator.
+    * @return A new bytes object containing the RR's RDATA.
+    */
+    function rdata(RRIterator memory iter) internal pure returns(bytes memory) {
+        return iter.data.substring(iter.rdataOffset, iter.nextOffset - iter.rdataOffset);
+    }
+
+    uint constant DNSKEY_FLAGS = 0;
+    uint constant DNSKEY_PROTOCOL = 2;
+    uint constant DNSKEY_ALGORITHM = 3;
+    uint constant DNSKEY_PUBKEY = 4;
+
+    struct DNSKEY {
+        uint16 flags;
+        uint8 protocol;
+        uint8 algorithm;
+        bytes publicKey;
+    }
+
+    function readDNSKEY(bytes memory data, uint offset, uint length) internal pure returns(DNSKEY memory self) {
+        self.flags = data.readUint16(offset + DNSKEY_FLAGS);
+        self.protocol = data.readUint8(offset + DNSKEY_PROTOCOL);
+        self.algorithm = data.readUint8(offset + DNSKEY_ALGORITHM);
+        self.publicKey = data.substring(offset + DNSKEY_PUBKEY, length - DNSKEY_PUBKEY);
+    } 
+
+    uint constant DS_KEY_TAG = 0;
+    uint constant DS_ALGORITHM = 2;
+    uint constant DS_DIGEST_TYPE = 3;
+    uint constant DS_DIGEST = 4;
+
+    struct DS {
+        uint16 keytag;
+        uint8 algorithm;
+        uint8 digestType;
+        bytes digest;
+    }
+
+    function readDS(bytes memory data, uint offset, uint length) internal pure returns(DS memory self) {
+        self.keytag = data.readUint16(offset + DS_KEY_TAG);
+        self.algorithm = data.readUint8(offset + DS_ALGORITHM);
+        self.digestType = data.readUint8(offset + DS_DIGEST_TYPE);
+        self.digest = data.substring(offset + DS_DIGEST, length - DS_DIGEST);
+    }
+
+    struct NSEC3 {
+        uint8 hashAlgorithm;
+        uint8 flags;
+        uint16 iterations;
+        bytes salt;
+        bytes32 nextHashedOwnerName;
+        bytes typeBitmap;
+    }
+
+    uint constant NSEC3_HASH_ALGORITHM = 0;
+    uint constant NSEC3_FLAGS = 1;
+    uint constant NSEC3_ITERATIONS = 2;
+    uint constant NSEC3_SALT_LENGTH = 4;
+    uint constant NSEC3_SALT = 5;
+
+    function readNSEC3(bytes memory data, uint offset, uint length) internal pure returns(NSEC3 memory self) {
+        uint end = offset + length;
+        self.hashAlgorithm = data.readUint8(offset + NSEC3_HASH_ALGORITHM);
+        self.flags = data.readUint8(offset + NSEC3_FLAGS);
+        self.iterations = data.readUint16(offset + NSEC3_ITERATIONS);
+        uint8 saltLength = data.readUint8(offset + NSEC3_SALT_LENGTH);
+        offset = offset + NSEC3_SALT;
+        self.salt = data.substring(offset, saltLength);
+        offset += saltLength;
+        uint8 nextLength = data.readUint8(offset);
+        require(nextLength <= 32);
+        offset += 1;
+        self.nextHashedOwnerName = data.readBytesN(offset, nextLength);
+        offset += nextLength;
+        self.typeBitmap = data.substring(offset, end - offset);
+    }
+
+    function checkTypeBitmap(NSEC3 memory self, uint16 rrtype) internal pure returns(bool) {
+        return checkTypeBitmap(self.typeBitmap, 0, rrtype);
+    }
+
+    /**
+    * @dev Checks if a given RR type exists in a type bitmap.
+    * @param bitmap The byte string to read the type bitmap from.
+    * @param offset The offset to start reading at.
+    * @param rrtype The RR type to check for.
+    * @return True if the type is found in the bitmap, false otherwise.
+    */
+    function checkTypeBitmap(bytes memory bitmap, uint offset, uint16 rrtype) internal pure returns (bool) {
+        uint8 typeWindow = uint8(rrtype >> 8);
+        uint8 windowByte = uint8((rrtype & 0xff) / 8);
+        uint8 windowBitmask = uint8(uint8(1) << (uint8(7) - uint8(rrtype & 0x7)));
+        for (uint off = offset; off < bitmap.length;) {
+            uint8 window = bitmap.readUint8(off);
+            uint8 len = bitmap.readUint8(off + 1);
+            if (typeWindow < window) {
+                // We've gone past our window; it's not here.
+                return false;
+            } else if (typeWindow == window) {
+                // Check this type bitmap
+                if (len <= windowByte) {
+                    // Our type is past the end of the bitmap
+                    return false;
+                }
+                return (bitmap.readUint8(off + windowByte + 2) & windowBitmask) != 0;
+            } else {
+                // Skip this type bitmap
+                off += len + 2;
+            }
+        }
+
+        return false;
+    }
+
+    function compareNames(bytes memory self, bytes memory other) internal pure returns (int) {
+        if (self.equals(other)) {
+            return 0;
+        }
+
+        uint off;
+        uint otheroff;
+        uint prevoff;
+        uint otherprevoff;
+        uint counts = labelCount(self, 0);
+        uint othercounts = labelCount(other, 0);
+
+        // Keep removing labels from the front of the name until both names are equal length
+        while (counts > othercounts) {
+            prevoff = off;
+            off = progress(self, off);
+            counts--;
+        }
+
+        while (othercounts > counts) {
+            otherprevoff = otheroff;
+            otheroff = progress(other, otheroff);
+            othercounts--;
+        }
+
+        // Compare the last nonequal labels to each other
+        while (counts > 0 && !self.equals(off, other, otheroff)) {
+            prevoff = off;
+            off = progress(self, off);
+            otherprevoff = otheroff;
+            otheroff = progress(other, otheroff);
+            counts -= 1;
+        }
+
+        if (off == 0) {
+            return -1;
+        }
+        if(otheroff == 0) {
+            return 1;
+        }
+
+        return self.compare(prevoff + 1, self.readUint8(prevoff), other, otherprevoff + 1, other.readUint8(otherprevoff));
+    }
+
+    /**
+     * @dev Compares two serial numbers using RFC1982 serial number math.
+     */
+    function serialNumberGte(uint32 i1, uint32 i2) internal pure returns(bool) {
+        return int32(i1) - int32(i2) >= 0;
+    }
+
+    function progress(bytes memory body, uint off) internal pure returns(uint) {
+        return off + 1 + body.readUint8(off);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/DNSResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+
+abstract contract DNSResolver is ResolverBase {
+    using RRUtils for *;
+    using BytesUtils for bytes;
+
+    bytes4 constant private DNS_RECORD_INTERFACE_ID = 0xa8fa5682;
+    bytes4 constant private DNS_ZONE_INTERFACE_ID = 0x5c47637c;
+
+    // DNSRecordChanged is emitted whenever a given node/name/resource's RRSET is updated.
+    event DNSRecordChanged(bytes32 indexed node, bytes name, uint16 resource, bytes record);
+    // DNSRecordDeleted is emitted whenever a given node/name/resource's RRSET is deleted.
+    event DNSRecordDeleted(bytes32 indexed node, bytes name, uint16 resource);
+    // DNSZoneCleared is emitted whenever a given node's zone information is cleared.
+    event DNSZoneCleared(bytes32 indexed node);
+
+    // DNSZonehashChanged is emitted whenever a given node's zone hash is updated.
+    event DNSZonehashChanged(bytes32 indexed node, bytes lastzonehash, bytes zonehash);
+
+    // Zone hashes for the domains.
+    // A zone hash is an EIP-1577 content hash in binary format that should point to a
+    // resource containing a single zonefile.
+    // node => contenthash
+    mapping(bytes32=>bytes) private zonehashes;
+
+    // Version the mapping for each zone.  This allows users who have lost
+    // track of their entries to effectively delete an entire zone by bumping
+    // the version number.
+    // node => version
+    mapping(bytes32=>uint256) private versions;
+
+    // The records themselves.  Stored as binary RRSETs
+    // node => version => name => resource => data
+    mapping(bytes32=>mapping(uint256=>mapping(bytes32=>mapping(uint16=>bytes)))) private records;
+
+    // Count of number of entries for a given name.  Required for DNS resolvers
+    // when resolving wildcards.
+    // node => version => name => number of records
+    mapping(bytes32=>mapping(uint256=>mapping(bytes32=>uint16))) private nameEntriesCount;
+
+    /**
+     * Set one or more DNS records.  Records are supplied in wire-format.
+     * Records with the same node/name/resource must be supplied one after the
+     * other to ensure the data is updated correctly. For example, if the data
+     * was supplied:
+     *     a.example.com IN A 1.2.3.4
+     *     a.example.com IN A 5.6.7.8
+     *     www.example.com IN CNAME a.example.com.
+     * then this would store the two A records for a.example.com correctly as a
+     * single RRSET, however if the data was supplied:
+     *     a.example.com IN A 1.2.3.4
+     *     www.example.com IN CNAME a.example.com.
+     *     a.example.com IN A 5.6.7.8
+     * then this would store the first A record, the CNAME, then the second A
+     * record which would overwrite the first.
+     *
+     * @param node the namehash of the node for which to set the records
+     * @param data the DNS wire format records to set
+     */
+    function setDNSRecords(bytes32 node, bytes calldata data) external authorised(node) {
+        uint16 resource = 0;
+        uint256 offset = 0;
+        bytes memory name;
+        bytes memory value;
+        bytes32 nameHash;
+        // Iterate over the data to add the resource records
+        for (RRUtils.RRIterator memory iter = data.iterateRRs(0); !iter.done(); iter.next()) {
+            if (resource == 0) {
+                resource = iter.dnstype;
+                name = iter.name();
+                nameHash = keccak256(abi.encodePacked(name));
+                value = bytes(iter.rdata());
+            } else {
+                bytes memory newName = iter.name();
+                if (resource != iter.dnstype || !name.equals(newName)) {
+                    setDNSRRSet(node, name, resource, data, offset, iter.offset - offset, value.length == 0);
+                    resource = iter.dnstype;
+                    offset = iter.offset;
+                    name = newName;
+                    nameHash = keccak256(name);
+                    value = bytes(iter.rdata());
+                }
+            }
+        }
+        if (name.length > 0) {
+            setDNSRRSet(node, name, resource, data, offset, data.length - offset, value.length == 0);
+        }
+    }
+
+    /**
+     * Obtain a DNS record.
+     * @param node the namehash of the node for which to fetch the record
+     * @param name the keccak-256 hash of the fully-qualified name for which to fetch the record
+     * @param resource the ID of the resource as per https://en.wikipedia.org/wiki/List_of_DNS_record_types
+     * @return the DNS record in wire format if present, otherwise empty
+     */
+    function dnsRecord(bytes32 node, bytes32 name, uint16 resource) public view returns (bytes memory) {
+        return records[node][versions[node]][name][resource];
+    }
+
+    /**
+     * Check if a given node has records.
+     * @param node the namehash of the node for which to check the records
+     * @param name the namehash of the node for which to check the records
+     */
+    function hasDNSRecords(bytes32 node, bytes32 name) public view returns (bool) {
+        return (nameEntriesCount[node][versions[node]][name] != 0);
+    }
+
+    /**
+     * Clear all information for a DNS zone.
+     * @param node the namehash of the node for which to clear the zone
+     */
+    function clearDNSZone(bytes32 node) public authorised(node) {
+        versions[node]++;
+        emit DNSZoneCleared(node);
+    }
+
+    /**
+     * setZonehash sets the hash for the zone.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param hash The zonehash to set
+     */
+    function setZonehash(bytes32 node, bytes calldata hash) external authorised(node) {
+        bytes memory oldhash = zonehashes[node];
+        zonehashes[node] = hash;
+        emit DNSZonehashChanged(node, oldhash, hash);
+    }
+
+    /**
+     * zonehash obtains the hash for the zone.
+     * @param node The ENS node to query.
+     * @return The associated contenthash.
+     */
+    function zonehash(bytes32 node) external view returns (bytes memory) {
+        return zonehashes[node];
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == DNS_RECORD_INTERFACE_ID ||
+               interfaceID == DNS_ZONE_INTERFACE_ID ||
+               super.supportsInterface(interfaceID);
+    }
+
+    function setDNSRRSet(
+        bytes32 node,
+        bytes memory name,
+        uint16 resource,
+        bytes memory data,
+        uint256 offset,
+        uint256 size,
+        bool deleteRecord) private
+    {
+        uint256 version = versions[node];
+        bytes32 nameHash = keccak256(name);
+        bytes memory rrData = data.substring(offset, size);
+        if (deleteRecord) {
+            if (records[node][version][nameHash][resource].length != 0) {
+                nameEntriesCount[node][version][nameHash]--;
+            }
+            delete(records[node][version][nameHash][resource]);
+            emit DNSRecordDeleted(node, name, resource);
+        } else {
+            if (records[node][version][nameHash][resource].length == 0) {
+                nameEntriesCount[node][version][nameHash]++;
+            }
+            records[node][version][nameHash][resource] = rrData;
+            emit DNSRecordChanged(node, name, resource, rrData);
+        }
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/InterfaceResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+
+abstract contract InterfaceResolver is ResolverBase, AddrResolver {
+    bytes4 constant private INTERFACE_INTERFACE_ID = bytes4(keccak256("interfaceImplementer(bytes32,bytes4)"));
+    bytes4 private constant INTERFACE_META_ID = 0x01ffc9a7;
+
+    event InterfaceChanged(bytes32 indexed node, bytes4 indexed interfaceID, address implementer);
+
+    mapping(bytes32=>mapping(bytes4=>address)) interfaces;
+
+    /**
+     * Sets an interface associated with a name.
+     * Setting the address to 0 restores the default behaviour of querying the contract at `addr()` for interface support.
+     * @param node The node to update.
+     * @param interfaceID The EIP 165 interface ID.
+     * @param implementer The address of a contract that implements this interface for this node.
+     */
+    function setInterface(bytes32 node, bytes4 interfaceID, address implementer) external authorised(node) {
+        interfaces[node][interfaceID] = implementer;
+        emit InterfaceChanged(node, interfaceID, implementer);
+    }
+
+    /**
+     * Returns the address of a contract that implements the specified interface for this name.
+     * If an implementer has not been set for this interfaceID and name, the resolver will query
+     * the contract at `addr()`. If `addr()` is set, a contract exists at that address, and that
+     * contract implements EIP165 and returns `true` for the specified interfaceID, its address
+     * will be returned.
+     * @param node The ENS node to query.
+     * @param interfaceID The EIP 165 interface ID to check for.
+     * @return The address that implements this interface, or 0 if the interface is unsupported.
+     */
+    function interfaceImplementer(bytes32 node, bytes4 interfaceID) external view returns (address) {
+        address implementer = interfaces[node][interfaceID];
+        if(implementer != address(0)) {
+            return implementer;
+        }
+
+        address a = addr(node);
+        if(a == address(0)) {
+            return address(0);
+        }
+
+        (bool success, bytes memory returnData) = a.staticcall(abi.encodeWithSignature("supportsInterface(bytes4)", INTERFACE_META_ID));
+        if(!success || returnData.length < 32 || returnData[31] == 0) {
+            // EIP 165 not supported by target
+            return address(0);
+        }
+
+        (success, returnData) = a.staticcall(abi.encodeWithSignature("supportsInterface(bytes4)", interfaceID));
+        if(!success || returnData.length < 32 || returnData[31] == 0) {
+            // Specified interface not supported by target
+            return address(0);
+        }
+
+        return a;
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override(AddrResolver, ResolverBase) public pure returns(bool) {
+        return interfaceID == INTERFACE_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/NameResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract NameResolver is ResolverBase {
+    bytes4 constant private NAME_INTERFACE_ID = 0x691f3431;
+
+    event NameChanged(bytes32 indexed node, string name);
+
+    mapping(bytes32=>string) names;
+
+    /**
+     * Sets the name associated with an ENS node, for reverse records.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param _name The name to set.
+     */
+    function setName(bytes32 node, string calldata _name) external authorised(node) {
+        names[node] = _name;
+        emit NameChanged(node, _name);
+    }
+
+    /**
+     * Returns the name associated with an ENS node, for reverse records.
+     * Defined in EIP181.
+     * @param node The ENS node to query.
+     * @return The associated name.
+     */
+    function name(bytes32 node) external view returns (string memory) {
+        return names[node];
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == NAME_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/PubkeyResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract PubkeyResolver is ResolverBase {
+    bytes4 constant private PUBKEY_INTERFACE_ID = 0xc8690233;
+
+    event PubkeyChanged(bytes32 indexed node, bytes32 x, bytes32 y);
+
+    struct PublicKey {
+        bytes32 x;
+        bytes32 y;
+    }
+
+    mapping(bytes32=>PublicKey) pubkeys;
+
+    /**
+     * Sets the SECP256k1 public key associated with an ENS node.
+     * @param node The ENS node to query
+     * @param x the X coordinate of the curve point for the public key.
+     * @param y the Y coordinate of the curve point for the public key.
+     */
+    function setPubkey(bytes32 node, bytes32 x, bytes32 y) external authorised(node) {
+        pubkeys[node] = PublicKey(x, y);
+        emit PubkeyChanged(node, x, y);
+    }
+
+    /**
+     * Returns the SECP256k1 public key associated with an ENS node.
+     * Defined in EIP 619.
+     * @param node The ENS node to query
+     * @return x The X coordinate of the curve point for the public key.
+     * @return y The Y coordinate of the curve point for the public key.
+     */
+    function pubkey(bytes32 node) external view returns (bytes32 x, bytes32 y) {
+        return (pubkeys[node].x, pubkeys[node].y);
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == PUBKEY_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/profiles/TextResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+abstract contract TextResolver is ResolverBase {
+    bytes4 constant private TEXT_INTERFACE_ID = 0x59d1d43c;
+
+    event TextChanged(bytes32 indexed node, string indexed indexedKey, string key);
+
+    mapping(bytes32=>mapping(string=>string)) texts;
+
+    /**
+     * Sets the text data associated with an ENS node and key.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param key The key to set.
+     * @param value The text data value to set.
+     */
+    function setText(bytes32 node, string calldata key, string calldata value) external authorised(node) {
+        texts[node][key] = value;
+        emit TextChanged(node, key, key);
+    }
+
+    /**
+     * Returns the text data associated with an ENS node and key.
+     * @param node The ENS node to query.
+     * @param key The text data key to query.
+     * @return The associated text data.
+     */
+    function text(bytes32 node, string calldata key) external view returns (string memory) {
+        return texts[node][key];
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override public pure returns(bool) {
+        return interfaceID == TEXT_INTERFACE_ID || super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @ensdomains/ens-contracts/contracts/resolvers/PublicResolver.sol@v0.0.4
+
+pragma solidity ^0.8.6;
+
+
+
+
+
+
+
+
+
+/**
+ * A simple resolver anyone can use; only allows the owner of a node to set its
+ * address.
+ */
+contract PublicResolver is ABIResolver, AddrResolver, ContentHashResolver, DNSResolver, InterfaceResolver, NameResolver, PubkeyResolver, TextResolver {
+    ENS ens;
+
+    /**
+     * A mapping of authorisations. An address that is authorised for a name
+     * may make any changes to the name that the owner could, but may not update
+     * the set of authorisations.
+     * (node, owner, caller) => isAuthorised
+     */
+    mapping(bytes32=>mapping(address=>mapping(address=>bool))) public authorisations;
+
+    event AuthorisationChanged(bytes32 indexed node, address indexed owner, address indexed target, bool isAuthorised);
+
+    constructor(ENS _ens) {
+        ens = _ens;
+    }
+
+    /**
+     * @dev Sets or clears an authorisation.
+     * Authorisations are specific to the caller. Any account can set an authorisation
+     * for any name, but the authorisation that is checked will be that of the
+     * current owner of a name. Thus, transferring a name effectively clears any
+     * existing authorisations, and new authorisations can be set in advance of
+     * an ownership transfer if desired.
+     *
+     * @param node The name to change the authorisation on.
+     * @param target The address that is to be authorised or deauthorised.
+     * @param _isAuthorised True if the address should be authorised, or false if it should be deauthorised.
+     */
+    function setAuthorisation(bytes32 node, address target, bool _isAuthorised) external {
+        authorisations[node][msg.sender][target] = _isAuthorised;
+        emit AuthorisationChanged(node, msg.sender, target, _isAuthorised);
+    }
+
+    function isAuthorised(bytes32 node) internal virtual override view returns(bool) {
+        address owner = ens.owner(node);
+        return owner == msg.sender || authorisations[node][owner][msg.sender];
+    }
+
+    function multicall(bytes[] calldata data) external returns(bytes[] memory results) {
+        results = new bytes[](data.length);
+        for(uint i = 0; i < data.length; i++) {
+            (bool success, bytes memory result) = address(this).delegatecall(data[i]);
+            require(success);
+            results[i] = result;
+        }
+        return results;
+    }
+
+    function supportsInterface(bytes4 interfaceID) virtual override(ABIResolver, AddrResolver, ContentHashResolver, DNSResolver, InterfaceResolver, NameResolver, PubkeyResolver, TextResolver) public pure returns(bool) {
+        return super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/DomainNotifier.sol@v3.5.0
+
+pragma solidity 0.8.6;
+
+/**
+ * DomainNotifier is used as a central point from which to
+ * determine which ENS domains (namespaces) have had their
+ * resolved data updated
+ */
+contract DomainNotifier {
+    event DomainUpdated(bytes32 indexed node);
+
+    ENS _ens;
+
+    constructor(ENS ens) {
+        _ens = ens;
+    }
+
+    /**
+     * Notifies of a domain/namespace's resolver data update.
+     * Only the resolver that is set for a given node should
+     * be able to trigger the notification
+     */
+    function domainUpdated(bytes32 node) external {
+        address resolver = _ens.resolver(node);
+        require(resolver == msg.sender);
+        emit DomainUpdated(node);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/enrolment-conditions/EnrolmentPrerequisiteRolesResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving roles which an identity must have to be eligible for a role claim
+ */
+abstract contract EnrolmentPrerequisiteRolesResolver is ResolverBase {
+    bytes4 private constant PREREQUISITE_ROLES_INTERFACE_ID = 0xc986c404;
+
+    struct PrerequisiteRoles {
+        bytes32[] roles;
+        bool mustHaveAll;
+    }
+
+    event PrerequisiteRolesChanged(
+        bytes32 indexed node,
+        PrerequisiteRoles newPrerequisiteRoles
+    );
+
+    mapping(bytes32 => PrerequisiteRoles) prerequisiteRolesMap;
+
+    /**
+     * Sets the prerequisite role required to be eligible for a role claim.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param roles The prerequisite roles to set.
+     */
+    function setPrerequisiteRoles(
+        bytes32 node,
+        bytes32[] calldata roles,
+        bool mustHaveAll
+    ) external authorised(node) {
+        prerequisiteRolesMap[node] = PrerequisiteRoles(roles, mustHaveAll);
+        emit PrerequisiteRolesChanged(node, prerequisiteRolesMap[node]);
+    }
+
+    /**
+     * Returns the prerequisite roles required to be eligible for a role claim.
+     * @param node The ENS node to query.
+     * @return roles and whether or not the requester mustHaveAll roles
+     */
+    function prerequisiteRoles(bytes32 node)
+        external
+        view
+        returns (bytes32[] memory roles, bool mustHaveAll)
+    {
+        return (
+            prerequisiteRolesMap[node].roles,
+            prerequisiteRolesMap[node].mustHaveAll
+        );
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == PREREQUISITE_ROLES_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/issuance/IssuersResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving identities (by did or by role) which can issue a role definition
+ */
+abstract contract IssuersResolver is ResolverBase {
+    bytes4 private constant ISSUERS_INTERFACE_ID = 0xc53a4413;
+
+    struct Issuers {
+        address[] dids;
+        bytes32 role;
+    }
+
+    event IssuersChanged(bytes32 indexed node, Issuers newIssuers);
+
+    mapping(bytes32 => Issuers) issuersMap;
+
+    /**
+     * Sets the dids associated with a role.
+     * Clears the role associated with a role.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param dids The dids to set.
+     */
+    function setIssuerDids(bytes32 node, address[] calldata dids)
+        external
+        authorised(node)
+    {
+        issuersMap[node].dids = dids;
+        delete issuersMap[node].role;
+        emit IssuersChanged(node, issuersMap[node]);
+    }
+
+    /**
+     * Sets the dids associated with a role.
+     * Clears the role associated with a role.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param role The role to set.
+     */
+    function setIssuerRole(bytes32 node, bytes32 role)
+        external
+        authorised(node)
+    {
+        issuersMap[node].role = role;
+        delete issuersMap[node].dids;
+        emit IssuersChanged(node, issuersMap[node]);
+    }
+
+    /**
+     * Returns the issuers associated with an ENS node.
+     * @param node The ENS node to query.
+     * @return dids or role of eligible issuers.
+     */
+    function issuers(bytes32 node)
+        external
+        view
+        returns (address[] memory dids, bytes32 role)
+    {
+        return (issuersMap[node].dids, issuersMap[node].role);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == ISSUERS_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/issuance/IssuerTypeResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving type of issuance expect for a role.
+ * The types are mutually exclusive. A role can only have a single type at a time.
+ * These possible types are:
+ * 00: Approval by some identity (i.e. an identity from a list of DIDs, or an identity with a given role)
+ * 10: “Real-time” approval by a smart contract.
+ */
+abstract contract IssuerTypeResolver is ResolverBase {
+    bytes4 private constant ISSUER_TYPE_INTERFACE_ID = 0xc585f697;
+
+    event IssuerTypeChanged(bytes32 indexed node, uint8 newType);
+
+    // uint used instead of enum so that new types can be added with needing to update the resolver
+    mapping(bytes32 => uint8) public issuerTypes;
+
+    /**
+     * Sets the issuerType associated with a role def.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param newIssuerType The issuerType to set.
+     */
+    function setIssuerType(bytes32 node, uint8 newIssuerType)
+        external
+        authorised(node)
+    {
+        issuerTypes[node] = newIssuerType;
+        emit IssuerTypeChanged(node, issuerTypes[node]);
+    }
+
+    /**
+     * Returns the issuerType associated with a role def.
+     * @param node The ENS node to query.
+     * @return The associated issuer type.
+     */
+    function issuerType(bytes32 node) external view returns (uint8) {
+        return (issuerTypes[node]);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == ISSUER_TYPE_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/revocation/RevokersResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving identities (by did or by role) which can revoke a role definition
+ */
+abstract contract RevokersResolver is ResolverBase {
+    bytes4 private constant REVOKERS_INTERFACE_ID = 0x74d3013a;
+
+    struct Revokers {
+        address[] dids;
+        bytes32 role;
+    }
+
+    event RevokersChanged(bytes32 indexed node, Revokers newRevokers);
+
+    mapping(bytes32 => Revokers) revokersMap;
+
+    /**
+     * Sets the dids associated with a role.
+     * Clears the role associated with a role.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param dids The dids to set.
+     */
+    function setRevokerDids(bytes32 node, address[] calldata dids)
+        external
+        authorised(node)
+    {
+        revokersMap[node].dids = dids;
+        delete revokersMap[node].role;
+        emit RevokersChanged(node, revokersMap[node]);
+    }
+
+    /**
+     * Sets the dids associated with a role.
+     * Clears the role associated with a role.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param role The role to set.
+     */
+    function setRevokerRole(bytes32 node, bytes32 role)
+        external
+        authorised(node)
+    {
+        revokersMap[node].role = role;
+        delete revokersMap[node].dids;
+        emit RevokersChanged(node, revokersMap[node]);
+    }
+
+    /**
+     * Returns the revokers associated with an ENS node.
+     * @param node The ENS node to query.
+     * @return dids or role of eligible revokers.
+     */
+    function revokers(bytes32 node)
+        external
+        view
+        returns (address[] memory dids, bytes32 role)
+    {
+        return (revokersMap[node].dids, revokersMap[node].role);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == REVOKERS_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/revocation/RevokerTypeResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving type of revocation expect for a role.
+ * The types are mutually exclusive. A role can only have a single type at a time.
+ * These possible types are:
+ * 00: Revocations allowed for some identity (i.e. an identity from a list of DIDs, or an identity with a given role)
+ * 10: “Real-time” revocation by a smart contract.
+ */
+abstract contract RevokerTypeResolver is ResolverBase {
+    bytes4 private constant REVOKER_TYPE_INTERFACE_ID = 0xec7adf27;
+
+    event RevokerTypeChanged(bytes32 indexed node, uint8 newType);
+
+    // uint used instead of enum so that new types can be added without needing to update the resolver
+    mapping(bytes32 => uint8) public revokerTypes;
+
+    /**
+     * Sets the revokerType associated with a role def.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param newRevokerType The revokerType to set.
+     */
+    function setRevokerType(bytes32 node, uint8 newRevokerType)
+        external
+        authorised(node)
+    {
+        revokerTypes[node] = newRevokerType;
+        emit RevokerTypeChanged(node, revokerTypes[node]);
+    }
+
+    /**
+     * Returns the revokerType associated with a role def.
+     * @param node The ENS node to query.
+     * @return The associated revoker type.
+     */
+    function revokerType(bytes32 node) external view returns (uint8) {
+        return (revokerTypes[node]);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == REVOKER_TYPE_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/profiles/VersionNumberResolver.sol@v3.5.0
+
+pragma solidity ^0.8.6;
+
+/**
+ * Profile for resolving version number of role definition.
+ */
+abstract contract VersionNumberResolver is ResolverBase {
+    bytes4 private constant VERSION_NUMBER_INTERFACE_ID = 0x338bc8fa;
+
+    event VersionNumberChanged(bytes32 indexed node, uint256 newVersion);
+
+    mapping(bytes32 => uint256) public versionNumbers;
+
+    /**
+     * Sets the version number associated with a role def.
+     * May only be called by the owner of that node in the ENS registry.
+     * @param node The node to update.
+     * @param newVersionNumber The versionNumber to set.
+     */
+    function setVersionNumber(bytes32 node, uint256 newVersionNumber)
+        external
+        authorised(node)
+    {
+        versionNumbers[node] = newVersionNumber;
+        emit VersionNumberChanged(node, versionNumbers[node]);
+    }
+
+    /**
+     * Returns the version number associated with a role def.
+     * @param node The ENS node to query.
+     * @return The associated version number.
+     */
+    function versionNumber(bytes32 node) external view returns (uint256) {
+        return (versionNumbers[node]);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        virtual
+        override
+        returns (bool)
+    {
+        return
+            interfaceID == VERSION_NUMBER_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/RoleDefinitionResolverV2.sol@v3.5.0
+
+pragma solidity 0.8.6;
+
+
+
+
+
+
+
+
+
+/**
+ * An extension of the PublicResolver customized for RoleDefinitions
+ */
+contract RoleDefinitionResolverV2 is
+    PublicResolver,
+    VersionNumberResolver,
+    IssuerTypeResolver,
+    IssuersResolver,
+    RevokerTypeResolver,
+    RevokersResolver,
+    EnrolmentPrerequisiteRolesResolver
+{
+    bytes4 private constant DOMAIN_UPDATED_INTERFACE_ID = 0x61610164;
+
+    DomainNotifier private notifier;
+
+    constructor(ENS _ens, DomainNotifier _notifier) PublicResolver(_ens) {
+        notifier = _notifier;
+    }
+
+    function isAuthorised(bytes32 node)
+        internal
+        view
+        override(PublicResolver, ResolverBase)
+        returns (bool)
+    {
+        address owner = ens.owner(node);
+        return
+            owner == msg.sender ||
+            authorisations[node][owner][msg.sender] ||
+            ens.isApprovedForAll(owner, msg.sender);
+    }
+
+    function domainUpdated(bytes32 node) external authorised(node) {
+        notifier.domainUpdated(node);
+    }
+
+    function supportsInterface(bytes4 interfaceID)
+        public
+        pure
+        override(
+            PublicResolver,
+            VersionNumberResolver,
+            IssuerTypeResolver,
+            IssuersResolver,
+            RevokerTypeResolver,
+            RevokersResolver,
+            EnrolmentPrerequisiteRolesResolver
+        )
+        returns (bool)
+    {
+        return
+            interfaceID == DOMAIN_UPDATED_INTERFACE_ID ||
+            super.supportsInterface(interfaceID);
+    }
+}
+
+
+// File @energyweb/iam-contracts/dist/contracts/roles/ClaimManager.sol@v3.5.0
+
+pragma solidity 0.8.6;
+
+
+
+
+
+
+
+
+
+interface EthereumDIDRegistry {
+  function identityOwner(address identity) external view returns(address);
+  function validDelegate(address identity, bytes32 delegateType, address delegate) external view returns(bool);
+}
+
+contract ClaimManager is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
+  /**
+  * @dev `veriKey` delegation type from EthereumDIDRegistry
+   */
+  bytes32 constant private ASSERTION_DELEGATE_TYPE = 0x766572694b657900000000000000000000000000000000000000000000000000;
+  string constant private ERC712_DOMAIN_NAME = "Claim Manager";
+  string constant private ERC712_DOMAIN_VERSION = "1.0";
+  
+  struct Record {
+    uint256 expiry;
+    uint256 version;
+  }
+  
+  struct Agreement {
+    address subject;
+    bytes32 role;
+    uint256 version;
+  }
+  
+  struct Proof {
+    address subject;
+    bytes32 role;
+    uint256 version;
+    uint256 expiry;
+    address issuer;
+  }
+  
+  bytes32 constant AGREEMENT_TYPEHASH = keccak256(
+    "Agreement(address subject,bytes32 role,uint256 version)"
+  );
+
+  bytes32 constant public PROOF_TYPEHASH = keccak256(
+    "Proof(address subject,bytes32 role,uint256 version,uint256 expiry,address issuer)"
+  );
+  
+  event RoleRegistered(address subject, bytes32 role, uint256 version, uint256 expiry, address issuer);
+  
+  mapping(bytes32 => mapping(address => Record)) private roles;
+  address private didRegistry;
+  address private ensRegistry;
+  
+  function initialize(address _didRegistry, address _ensRegistry) public initializer{
+    didRegistry = _didRegistry;
+    ensRegistry = _ensRegistry;
+    __Ownable_init();
+    __EIP712_init(ERC712_DOMAIN_NAME, ERC712_DOMAIN_VERSION);
+  }
+  
+  function isAuthorized(address identity, address approved) internal returns (bool) {
+    EthereumDIDRegistry registry = EthereumDIDRegistry(didRegistry);
+    if (
+      registry.identityOwner(identity) == approved || 
+      (ERC165CheckerUpgradeable.supportsInterface(identity, type(IOwned).interfaceId) && approved == IOwned(identity).owner()) ||
+      registry.validDelegate(identity, ASSERTION_DELEGATE_TYPE, approved)
+      ) {
+        return true;
+      } else {
+        return false;
+      }
+  }
+  
+  function hasRole(address subject, bytes32 role, uint256 version) public view returns(bool) {
+    Record memory r = roles[role][subject];
+    if (version == 0) {
+      return r.expiry > block.timestamp;
+    } else {
+      return r.expiry > block.timestamp && r.version >= version;
+    }
+  }
+  
+  function register(
+    address subject, 
+    bytes32 role,
+    uint256 version,
+    uint256 expiry,
+    address issuer,
+    bytes calldata subject_agreement,
+    bytes calldata role_proof
+    ) external {
+    address proofSigner;
+    address agreementSigner;
+    {
+    require(VersionNumberResolver(ENSRegistry(ensRegistry).resolver(role)).versionNumber(role) >= version, 
+    "ClaimManager: Such version of this role doesn't exist");
+    
+    bytes32 agreementHash = ECDSAUpgradeable.toEthSignedMessageHash(
+      _hashTypedDataV4(keccak256(abi.encode(
+      AGREEMENT_TYPEHASH,
+      subject,
+      role,
+      version
+    ))));
+    
+    bytes32 proofHash = ECDSAUpgradeable.toEthSignedMessageHash(
+      _hashTypedDataV4(keccak256(abi.encode(
+      PROOF_TYPEHASH,
+      subject,
+      role,
+      version,
+      expiry,
+      issuer
+    ))));
+    agreementSigner = ECDSAUpgradeable.recover(agreementHash, subject_agreement);
+    proofSigner = ECDSAUpgradeable.recover(proofHash, role_proof);
+    }
+        
+    require(
+      isAuthorized(subject, agreementSigner),
+       "ClaimManager: agreement signer is not authorized to sign on behalf of subject"
+    );
+    require(
+      isAuthorized(issuer, proofSigner),
+       "ClaimManager: proof signer is not authorized to sign on behalf of issuer"
+    );
+    
+    verifyPreconditions(subject, role);
+    
+    verifyIssuer(issuer, role);
+    
+    Record storage r = roles[role][subject];
+    r.expiry = expiry;
+    r.version = version;
+    
+    emit RoleRegistered(subject, role, version, expiry, issuer);
+  }
+  
+  function verifyPreconditions(address subject, bytes32 role) internal view {
+    address resolver = ENSRegistry(ensRegistry).resolver(role);
+    
+    (bytes32[] memory requiredRoles, bool mustHaveAll) = EnrolmentPrerequisiteRolesResolver(resolver).prerequisiteRoles(role);
+    if (requiredRoles.length == 0) {
+      return;
+    }
+    uint numberOfRequiredRoles = mustHaveAll ? requiredRoles.length : 1;
+    uint numberOfRoles = 0;
+    for (uint i = 0; i < requiredRoles.length && numberOfRoles < numberOfRequiredRoles; i++) {
+      if (this.hasRole(subject, requiredRoles[i], 0)) {
+        numberOfRoles++;
+      }
+    }
+    require(
+      numberOfRoles == numberOfRequiredRoles,
+      "ClaimManager: Enrollment prerequisites are not met"
+    );
+  }
+
+  function verifyIssuer(address issuer, bytes32 role) internal view {
+    address resolver = ENSRegistry(ensRegistry).resolver(role);
+    (address[] memory dids, bytes32 issuer_role) = IssuersResolver(resolver).issuers(role);
+    if (dids.length > 0) {
+      EthereumDIDRegistry registry = EthereumDIDRegistry(didRegistry);
+      for (uint i = 0; i < dids.length; i++) {
+        if (dids[i] == issuer || registry.validDelegate(dids[i], ASSERTION_DELEGATE_TYPE, issuer)) {
+          return;
+        }
+      }
+      revert("ClaimManager: Issuer is not listed in role issuers list");
+    } else if (issuer_role != "") {
+      require(hasRole(issuer, issuer_role, 0), "ClaimManager: Issuer does not has required role");
+    } else {
+      revert("ClaimManager: Role issuers are not specified");
+    }
+  }
+
+  function version() external pure returns (string memory) {
+      return "v0.1";
+  }
+
+  function _authorizeUpgrade(address) internal override onlyOwner {
+        // Allow only owner to authorize a smart contract upgrade
+    }
+}
+
+
+// File contracts/libs/Roles.sol
+
+pragma solidity ^0.8.6;
+
+library RolesLibrary {
+
+    function hasRole(
+        address _userAddress,
+        address _claimManagerAddress,
+        bytes32[] memory _roles
+    ) internal view returns (bool) {
+        if (_roles.length == 0) {
+            return true;
+        }
+        ClaimManager claimManager = ClaimManager(_claimManagerAddress); // Contract deployed and maintained by EnergyWeb Fondation
+        for (uint i = 0; i < _roles.length; i++) {
+            if (claimManager.hasRole(_userAddress, _roles[i], 1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function isOwner(address _user, address _claimManagerAddress, bytes32 _ownerRole) internal view returns (bool){
+        ClaimManager claimManager = ClaimManager(_claimManagerAddress); // Contract deployed and maintained by EnergyWeb Fondation
+
+        return (claimManager.hasRole(_user, _ownerRole, 1));
+    }
+}
+
+
+// File contracts/libs/ABDKMath64x64.sol
+
+/*
+ * ABDK Math 64.64 Smart Contract Library.  Copyright © 2019 by ABDK Consulting.
+ * Author: Mikhail Vladimirov <mikhail.vladimirov@gmail.com>
+ */
+pragma solidity ^0.8.6;
+
+/**
+ * Smart contract library of mathematical functions operating with signed
+ * 64.64-bit fixed point numbers.  Signed 64.64-bit fixed point number is
+ * basically a simple fraction whose numerator is signed 128-bit integer and
+ * denominator is 2^64.  As long as denominator is always the same, there is no
+ * need to store it, thus in Solidity signed 64.64-bit fixed point numbers are
+ * represented by int128 type holding only the numerator.
+ */
+library ABDKMath64x64 {
+    /*
+     * Minimum value signed 64.64-bit fixed point number may have.
+     */
+    int128 private constant MIN_64x64 = -0x80000000000000000000000000000000;
+
+    /*
+     * Maximum value signed 64.64-bit fixed point number may have.
+     */
+    int128 private constant MAX_64x64 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+
+    /**
+     * Convert signed 256-bit integer number into signed 64.64-bit fixed point
+     * number.  Revert on overflow.
+     *
+     * @param x signed 256-bit integer number
+     * @return signed 64.64-bit fixed point number
+     */
+    function fromInt(int256 x) internal pure returns (int128) {
+        unchecked {
+            require(x >= -0x8000000000000000 && x <= 0x7FFFFFFFFFFFFFFF);
+            return int128(x << 64);
+        }
+    }
+
+    /**
+     * Convert signed 64.64 fixed point number into signed 64-bit integer number
+     * rounding down.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64-bit integer number
+     */
+    function toInt(int128 x) internal pure returns (int64) {
+        unchecked {
+            return int64(x >> 64);
+        }
+    }
+
+    /**
+     * Convert unsigned 256-bit integer number into signed 64.64-bit fixed point
+     * number.  Revert on overflow.
+     *
+     * @param x unsigned 256-bit integer number
+     * @return signed 64.64-bit fixed point number
+     */
+    function fromUInt(uint256 x) internal pure returns (int128) {
+        unchecked {
+            require(x <= 0x7FFFFFFFFFFFFFFF);
+            return int128(int256(x << 64));
+        }
+    }
+
+    /**
+     * Convert signed 64.64 fixed point number into unsigned 64-bit integer
+     * number rounding down.  Revert on underflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return unsigned 64-bit integer number
+     */
+    function toUInt(int128 x) internal pure returns (uint64) {
+        unchecked {
+            require(x >= 0);
+            return uint64(uint128(x >> 64));
+        }
+    }
+
+    /**
+     * Convert signed 128.128 fixed point number into signed 64.64-bit fixed point
+     * number rounding down.  Revert on overflow.
+     *
+     * @param x signed 128.128-bin fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function from128x128(int256 x) internal pure returns (int128) {
+        unchecked {
+            int256 result = x >> 64;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Convert signed 64.64 fixed point number into signed 128.128 fixed point
+     * number.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 128.128 fixed point number
+     */
+    function to128x128(int128 x) internal pure returns (int256) {
+        unchecked {
+            return int256(x) << 64;
+        }
+    }
+
+    /**
+     * Calculate x + y.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function add(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            int256 result = int256(x) + y;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate x - y.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function sub(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            int256 result = int256(x) - y;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate x * y rounding down.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function mul(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            int256 result = (int256(x) * y) >> 64;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate x * y rounding towards zero, where x is signed 64.64 fixed point
+     * number and y is signed 256-bit integer number.  Revert on overflow.
+     *
+     * @param x signed 64.64 fixed point number
+     * @param y signed 256-bit integer number
+     * @return signed 256-bit integer number
+     */
+    function muli(int128 x, int256 y) internal pure returns (int256) {
+        unchecked {
+            if (x == MIN_64x64) {
+                require(
+                    y >= -0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF &&
+                        y <= 0x1000000000000000000000000000000000000000000000000
+                );
+                return -y << 63;
+            } else {
+                bool negativeResult = false;
+                if (x < 0) {
+                    x = -x;
+                    negativeResult = true;
+                }
+                if (y < 0) {
+                    y = -y; // We rely on overflow behavior here
+                    negativeResult = !negativeResult;
+                }
+                uint256 absoluteResult = mulu(x, uint256(y));
+                if (negativeResult) {
+                    require(
+                        absoluteResult <=
+                            0x8000000000000000000000000000000000000000000000000000000000000000
+                    );
+                    return -int256(absoluteResult); // We rely on overflow behavior here
+                } else {
+                    require(
+                        absoluteResult <=
+                            0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+                    );
+                    return int256(absoluteResult);
+                }
+            }
+        }
+    }
+
+    /**
+     * Calculate x * y rounding down, where x is signed 64.64 fixed point number
+     * and y is unsigned 256-bit integer number.  Revert on overflow.
+     *
+     * @param x signed 64.64 fixed point number
+     * @param y unsigned 256-bit integer number
+     * @return unsigned 256-bit integer number
+     */
+    function mulu(int128 x, uint256 y) internal pure returns (uint256) {
+        unchecked {
+            if (y == 0) return 0;
+
+            require(x >= 0);
+
+            uint256 lo = (uint256(int256(x)) *
+                (y & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)) >> 64;
+            uint256 hi = uint256(int256(x)) * (y >> 128);
+
+            require(hi <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            hi <<= 64;
+
+            require(
+                hi <=
+                    0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF -
+                        lo
+            );
+            return hi + lo;
+        }
+    }
+
+    /**
+     * Calculate x / y rounding towards zero.  Revert on overflow or when y is
+     * zero.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function div(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            require(y != 0);
+            int256 result = (int256(x) << 64) / y;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate x / y rounding towards zero, where x and y are signed 256-bit
+     * integer numbers.  Revert on overflow or when y is zero.
+     *
+     * @param x signed 256-bit integer number
+     * @param y signed 256-bit integer number
+     * @return signed 64.64-bit fixed point number
+     */
+    function divi(int256 x, int256 y) internal pure returns (int128) {
+        unchecked {
+            require(y != 0);
+
+            bool negativeResult = false;
+            if (x < 0) {
+                x = -x; // We rely on overflow behavior here
+                negativeResult = true;
+            }
+            if (y < 0) {
+                y = -y; // We rely on overflow behavior here
+                negativeResult = !negativeResult;
+            }
+            uint128 absoluteResult = divuu(uint256(x), uint256(y));
+            if (negativeResult) {
+                require(absoluteResult <= 0x80000000000000000000000000000000);
+                return -int128(absoluteResult); // We rely on overflow behavior here
+            } else {
+                require(absoluteResult <= 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+                return int128(absoluteResult); // We rely on overflow behavior here
+            }
+        }
+    }
+
+    /**
+     * Calculate x / y rounding towards zero, where x and y are unsigned 256-bit
+     * integer numbers.  Revert on overflow or when y is zero.
+     *
+     * @param x unsigned 256-bit integer number
+     * @param y unsigned 256-bit integer number
+     * @return signed 64.64-bit fixed point number
+     */
+    function divu(uint256 x, uint256 y) internal pure returns (int128) {
+        unchecked {
+            require(y != 0);
+            uint128 result = divuu(x, y);
+            require(result <= uint128(MAX_64x64));
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate -x.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function neg(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x != MIN_64x64);
+            return -x;
+        }
+    }
+
+    /**
+     * Calculate |x|.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function abs(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x != MIN_64x64);
+            return x < 0 ? -x : x;
+        }
+    }
+
+    /**
+     * Calculate 1 / x rounding towards zero.  Revert on overflow or when x is
+     * zero.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function inv(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x != 0);
+            int256 result = int256(0x100000000000000000000000000000000) / x;
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate arithmetics average of x and y, i.e. (x + y) / 2 rounding down.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function avg(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            return int128((int256(x) + int256(y)) >> 1);
+        }
+    }
+
+    /**
+     * Calculate geometric average of x and y, i.e. sqrt (x * y) rounding down.
+     * Revert on overflow or in case x * y is negative.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function gavg(int128 x, int128 y) internal pure returns (int128) {
+        unchecked {
+            int256 m = int256(x) * int256(y);
+            require(m >= 0);
+            require(
+                m <
+                    0x4000000000000000000000000000000000000000000000000000000000000000
+            );
+            return int128(sqrtu(uint256(m)));
+        }
+    }
+
+    /**
+     * Calculate x^y assuming 0^0 is 1, where x is signed 64.64 fixed point number
+     * and y is unsigned 256-bit integer number.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @param y uint256 value
+     * @return signed 64.64-bit fixed point number
+     */
+    function pow(int128 x, uint256 y) internal pure returns (int128) {
+        unchecked {
+            bool negative = x < 0 && y & 1 == 1;
+
+            uint256 absX = uint128(x < 0 ? -x : x);
+            uint256 absResult;
+            absResult = 0x100000000000000000000000000000000;
+
+            if (absX <= 0x10000000000000000) {
+                absX <<= 63;
+                while (y != 0) {
+                    if (y & 0x1 != 0) {
+                        absResult = (absResult * absX) >> 127;
+                    }
+                    absX = (absX * absX) >> 127;
+
+                    if (y & 0x2 != 0) {
+                        absResult = (absResult * absX) >> 127;
+                    }
+                    absX = (absX * absX) >> 127;
+
+                    if (y & 0x4 != 0) {
+                        absResult = (absResult * absX) >> 127;
+                    }
+                    absX = (absX * absX) >> 127;
+
+                    if (y & 0x8 != 0) {
+                        absResult = (absResult * absX) >> 127;
+                    }
+                    absX = (absX * absX) >> 127;
+
+                    y >>= 4;
+                }
+
+                absResult >>= 64;
+            } else {
+                uint256 absXShift = 63;
+                if (absX < 0x1000000000000000000000000) {
+                    absX <<= 32;
+                    absXShift -= 32;
+                }
+                if (absX < 0x10000000000000000000000000000) {
+                    absX <<= 16;
+                    absXShift -= 16;
+                }
+                if (absX < 0x1000000000000000000000000000000) {
+                    absX <<= 8;
+                    absXShift -= 8;
+                }
+                if (absX < 0x10000000000000000000000000000000) {
+                    absX <<= 4;
+                    absXShift -= 4;
+                }
+                if (absX < 0x40000000000000000000000000000000) {
+                    absX <<= 2;
+                    absXShift -= 2;
+                }
+                if (absX < 0x80000000000000000000000000000000) {
+                    absX <<= 1;
+                    absXShift -= 1;
+                }
+
+                uint256 resultShift = 0;
+                while (y != 0) {
+                    require(absXShift < 64);
+
+                    if (y & 0x1 != 0) {
+                        absResult = (absResult * absX) >> 127;
+                        resultShift += absXShift;
+                        if (absResult > 0x100000000000000000000000000000000) {
+                            absResult >>= 1;
+                            resultShift += 1;
+                        }
+                    }
+                    absX = (absX * absX) >> 127;
+                    absXShift <<= 1;
+                    if (absX >= 0x100000000000000000000000000000000) {
+                        absX >>= 1;
+                        absXShift += 1;
+                    }
+
+                    y >>= 1;
+                }
+
+                require(resultShift < 64);
+                absResult >>= 64 - resultShift;
+            }
+            int256 result = negative ? -int256(absResult) : int256(absResult);
+            require(result >= MIN_64x64 && result <= MAX_64x64);
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate sqrt (x) rounding down.  Revert if x < 0.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function sqrt(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x >= 0);
+            return int128(sqrtu(uint256(int256(x)) << 64));
+        }
+    }
+
+    /**
+     * Calculate binary logarithm of x.  Revert if x <= 0.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function log_2(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x > 0);
+
+            int256 msb = 0;
+            int256 xc = x;
+            if (xc >= 0x10000000000000000) {
+                xc >>= 64;
+                msb += 64;
+            }
+            if (xc >= 0x100000000) {
+                xc >>= 32;
+                msb += 32;
+            }
+            if (xc >= 0x10000) {
+                xc >>= 16;
+                msb += 16;
+            }
+            if (xc >= 0x100) {
+                xc >>= 8;
+                msb += 8;
+            }
+            if (xc >= 0x10) {
+                xc >>= 4;
+                msb += 4;
+            }
+            if (xc >= 0x4) {
+                xc >>= 2;
+                msb += 2;
+            }
+            if (xc >= 0x2) msb += 1; // No need to shift xc anymore
+
+            int256 result = (msb - 64) << 64;
+            uint256 ux = uint256(int256(x)) << uint256(127 - msb);
+            for (int256 bit = 0x8000000000000000; bit > 0; bit >>= 1) {
+                ux *= ux;
+                uint256 b = ux >> 255;
+                ux >>= 127 + b;
+                result += bit * int256(b);
+            }
+
+            return int128(result);
+        }
+    }
+
+    /**
+     * Calculate natural logarithm of x.  Revert if x <= 0.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function ln(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x > 0);
+
+            return
+                int128(
+                    int256(
+                        (uint256(int256(log_2(x))) *
+                            0xB17217F7D1CF79ABC9E3B39803F2F6AF) >> 128
+                    )
+                );
+        }
+    }
+
+    /**
+     * Calculate binary exponent of x.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function exp_2(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x < 0x400000000000000000); // Overflow
+
+            if (x < -0x400000000000000000) return 0; // Underflow
+
+            uint256 result = 0x80000000000000000000000000000000;
+
+            if (x & 0x8000000000000000 > 0)
+                result = (result * 0x16A09E667F3BCC908B2FB1366EA957D3E) >> 128;
+            if (x & 0x4000000000000000 > 0)
+                result = (result * 0x1306FE0A31B7152DE8D5A46305C85EDEC) >> 128;
+            if (x & 0x2000000000000000 > 0)
+                result = (result * 0x1172B83C7D517ADCDF7C8C50EB14A791F) >> 128;
+            if (x & 0x1000000000000000 > 0)
+                result = (result * 0x10B5586CF9890F6298B92B71842A98363) >> 128;
+            if (x & 0x800000000000000 > 0)
+                result = (result * 0x1059B0D31585743AE7C548EB68CA417FD) >> 128;
+            if (x & 0x400000000000000 > 0)
+                result = (result * 0x102C9A3E778060EE6F7CACA4F7A29BDE8) >> 128;
+            if (x & 0x200000000000000 > 0)
+                result = (result * 0x10163DA9FB33356D84A66AE336DCDFA3F) >> 128;
+            if (x & 0x100000000000000 > 0)
+                result = (result * 0x100B1AFA5ABCBED6129AB13EC11DC9543) >> 128;
+            if (x & 0x80000000000000 > 0)
+                result = (result * 0x10058C86DA1C09EA1FF19D294CF2F679B) >> 128;
+            if (x & 0x40000000000000 > 0)
+                result = (result * 0x1002C605E2E8CEC506D21BFC89A23A00F) >> 128;
+            if (x & 0x20000000000000 > 0)
+                result = (result * 0x100162F3904051FA128BCA9C55C31E5DF) >> 128;
+            if (x & 0x10000000000000 > 0)
+                result = (result * 0x1000B175EFFDC76BA38E31671CA939725) >> 128;
+            if (x & 0x8000000000000 > 0)
+                result = (result * 0x100058BA01FB9F96D6CACD4B180917C3D) >> 128;
+            if (x & 0x4000000000000 > 0)
+                result = (result * 0x10002C5CC37DA9491D0985C348C68E7B3) >> 128;
+            if (x & 0x2000000000000 > 0)
+                result = (result * 0x1000162E525EE054754457D5995292026) >> 128;
+            if (x & 0x1000000000000 > 0)
+                result = (result * 0x10000B17255775C040618BF4A4ADE83FC) >> 128;
+            if (x & 0x800000000000 > 0)
+                result = (result * 0x1000058B91B5BC9AE2EED81E9B7D4CFAB) >> 128;
+            if (x & 0x400000000000 > 0)
+                result = (result * 0x100002C5C89D5EC6CA4D7C8ACC017B7C9) >> 128;
+            if (x & 0x200000000000 > 0)
+                result = (result * 0x10000162E43F4F831060E02D839A9D16D) >> 128;
+            if (x & 0x100000000000 > 0)
+                result = (result * 0x100000B1721BCFC99D9F890EA06911763) >> 128;
+            if (x & 0x80000000000 > 0)
+                result = (result * 0x10000058B90CF1E6D97F9CA14DBCC1628) >> 128;
+            if (x & 0x40000000000 > 0)
+                result = (result * 0x1000002C5C863B73F016468F6BAC5CA2B) >> 128;
+            if (x & 0x20000000000 > 0)
+                result = (result * 0x100000162E430E5A18F6119E3C02282A5) >> 128;
+            if (x & 0x10000000000 > 0)
+                result = (result * 0x1000000B1721835514B86E6D96EFD1BFE) >> 128;
+            if (x & 0x8000000000 > 0)
+                result = (result * 0x100000058B90C0B48C6BE5DF846C5B2EF) >> 128;
+            if (x & 0x4000000000 > 0)
+                result = (result * 0x10000002C5C8601CC6B9E94213C72737A) >> 128;
+            if (x & 0x2000000000 > 0)
+                result = (result * 0x1000000162E42FFF037DF38AA2B219F06) >> 128;
+            if (x & 0x1000000000 > 0)
+                result = (result * 0x10000000B17217FBA9C739AA5819F44F9) >> 128;
+            if (x & 0x800000000 > 0)
+                result = (result * 0x1000000058B90BFCDEE5ACD3C1CEDC823) >> 128;
+            if (x & 0x400000000 > 0)
+                result = (result * 0x100000002C5C85FE31F35A6A30DA1BE50) >> 128;
+            if (x & 0x200000000 > 0)
+                result = (result * 0x10000000162E42FF0999CE3541B9FFFCF) >> 128;
+            if (x & 0x100000000 > 0)
+                result = (result * 0x100000000B17217F80F4EF5AADDA45554) >> 128;
+            if (x & 0x80000000 > 0)
+                result = (result * 0x10000000058B90BFBF8479BD5A81B51AD) >> 128;
+            if (x & 0x40000000 > 0)
+                result = (result * 0x1000000002C5C85FDF84BD62AE30A74CC) >> 128;
+            if (x & 0x20000000 > 0)
+                result = (result * 0x100000000162E42FEFB2FED257559BDAA) >> 128;
+            if (x & 0x10000000 > 0)
+                result = (result * 0x1000000000B17217F7D5A7716BBA4A9AE) >> 128;
+            if (x & 0x8000000 > 0)
+                result = (result * 0x100000000058B90BFBE9DDBAC5E109CCE) >> 128;
+            if (x & 0x4000000 > 0)
+                result = (result * 0x10000000002C5C85FDF4B15DE6F17EB0D) >> 128;
+            if (x & 0x2000000 > 0)
+                result = (result * 0x1000000000162E42FEFA494F1478FDE05) >> 128;
+            if (x & 0x1000000 > 0)
+                result = (result * 0x10000000000B17217F7D20CF927C8E94C) >> 128;
+            if (x & 0x800000 > 0)
+                result = (result * 0x1000000000058B90BFBE8F71CB4E4B33D) >> 128;
+            if (x & 0x400000 > 0)
+                result = (result * 0x100000000002C5C85FDF477B662B26945) >> 128;
+            if (x & 0x200000 > 0)
+                result = (result * 0x10000000000162E42FEFA3AE53369388C) >> 128;
+            if (x & 0x100000 > 0)
+                result = (result * 0x100000000000B17217F7D1D351A389D40) >> 128;
+            if (x & 0x80000 > 0)
+                result = (result * 0x10000000000058B90BFBE8E8B2D3D4EDE) >> 128;
+            if (x & 0x40000 > 0)
+                result = (result * 0x1000000000002C5C85FDF4741BEA6E77E) >> 128;
+            if (x & 0x20000 > 0)
+                result = (result * 0x100000000000162E42FEFA39FE95583C2) >> 128;
+            if (x & 0x10000 > 0)
+                result = (result * 0x1000000000000B17217F7D1CFB72B45E1) >> 128;
+            if (x & 0x8000 > 0)
+                result = (result * 0x100000000000058B90BFBE8E7CC35C3F0) >> 128;
+            if (x & 0x4000 > 0)
+                result = (result * 0x10000000000002C5C85FDF473E242EA38) >> 128;
+            if (x & 0x2000 > 0)
+                result = (result * 0x1000000000000162E42FEFA39F02B772C) >> 128;
+            if (x & 0x1000 > 0)
+                result = (result * 0x10000000000000B17217F7D1CF7D83C1A) >> 128;
+            if (x & 0x800 > 0)
+                result = (result * 0x1000000000000058B90BFBE8E7BDCBE2E) >> 128;
+            if (x & 0x400 > 0)
+                result = (result * 0x100000000000002C5C85FDF473DEA871F) >> 128;
+            if (x & 0x200 > 0)
+                result = (result * 0x10000000000000162E42FEFA39EF44D91) >> 128;
+            if (x & 0x100 > 0)
+                result = (result * 0x100000000000000B17217F7D1CF79E949) >> 128;
+            if (x & 0x80 > 0)
+                result = (result * 0x10000000000000058B90BFBE8E7BCE544) >> 128;
+            if (x & 0x40 > 0)
+                result = (result * 0x1000000000000002C5C85FDF473DE6ECA) >> 128;
+            if (x & 0x20 > 0)
+                result = (result * 0x100000000000000162E42FEFA39EF366F) >> 128;
+            if (x & 0x10 > 0)
+                result = (result * 0x1000000000000000B17217F7D1CF79AFA) >> 128;
+            if (x & 0x8 > 0)
+                result = (result * 0x100000000000000058B90BFBE8E7BCD6D) >> 128;
+            if (x & 0x4 > 0)
+                result = (result * 0x10000000000000002C5C85FDF473DE6B2) >> 128;
+            if (x & 0x2 > 0)
+                result = (result * 0x1000000000000000162E42FEFA39EF358) >> 128;
+            if (x & 0x1 > 0)
+                result = (result * 0x10000000000000000B17217F7D1CF79AB) >> 128;
+
+            result >>= uint256(int256(63 - (x >> 64)));
+            require(result <= uint256(int256(MAX_64x64)));
+
+            return int128(int256(result));
+        }
+    }
+
+    /**
+     * Calculate natural exponent of x.  Revert on overflow.
+     *
+     * @param x signed 64.64-bit fixed point number
+     * @return signed 64.64-bit fixed point number
+     */
+    function exp(int128 x) internal pure returns (int128) {
+        unchecked {
+            require(x < 0x400000000000000000); // Overflow
+
+            if (x < -0x400000000000000000) return 0; // Underflow
+
+            return
+                exp_2(
+                    int128(
+                        (int256(x) * 0x171547652B82FE1777D0FFDA0D23A7D12) >> 128
+                    )
+                );
+        }
+    }
+
+    /**
+     * Calculate x / y rounding towards zero, where x and y are unsigned 256-bit
+     * integer numbers.  Revert on overflow or when y is zero.
+     *
+     * @param x unsigned 256-bit integer number
+     * @param y unsigned 256-bit integer number
+     * @return unsigned 64.64-bit fixed point number
+     */
+    function divuu(uint256 x, uint256 y) private pure returns (uint128) {
+        unchecked {
+            require(y != 0);
+
+            uint256 result;
+
+            if (x <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF)
+                result = (x << 64) / y;
+            else {
+                uint256 msb = 192;
+                uint256 xc = x >> 192;
+                if (xc >= 0x100000000) {
+                    xc >>= 32;
+                    msb += 32;
+                }
+                if (xc >= 0x10000) {
+                    xc >>= 16;
+                    msb += 16;
+                }
+                if (xc >= 0x100) {
+                    xc >>= 8;
+                    msb += 8;
+                }
+                if (xc >= 0x10) {
+                    xc >>= 4;
+                    msb += 4;
+                }
+                if (xc >= 0x4) {
+                    xc >>= 2;
+                    msb += 2;
+                }
+                if (xc >= 0x2) msb += 1; // No need to shift xc anymore
+
+                result = (x << (255 - msb)) / (((y - 1) >> (msb - 191)) + 1);
+                require(result <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+
+                uint256 hi = result * (y >> 128);
+                uint256 lo = result * (y & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+
+                uint256 xh = x >> 192;
+                uint256 xl = x << 64;
+
+                if (xl < lo) xh -= 1;
+                xl -= lo; // We rely on overflow behavior here
+                lo = hi << 128;
+                if (xl < lo) xh -= 1;
+                xl -= lo; // We rely on overflow behavior here
+
+                assert(xh == hi >> 128);
+
+                result += xl / y;
+            }
+
+            require(result <= 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+            return uint128(result);
+        }
+    }
+
+    /**
+     * Calculate sqrt (x) rounding down, where x is unsigned 256-bit integer
+     * number.
+     *
+     * @param x unsigned 256-bit integer number
+     * @return unsigned 128-bit integer number
+     */
+    function sqrtu(uint256 x) private pure returns (uint128) {
+        unchecked {
+            if (x == 0) return 0;
+            else {
+                uint256 xx = x;
+                uint256 r = 1;
+                if (xx >= 0x100000000000000000000000000000000) {
+                    xx >>= 128;
+                    r <<= 64;
+                }
+                if (xx >= 0x10000000000000000) {
+                    xx >>= 64;
+                    r <<= 32;
+                }
+                if (xx >= 0x100000000) {
+                    xx >>= 32;
+                    r <<= 16;
+                }
+                if (xx >= 0x10000) {
+                    xx >>= 16;
+                    r <<= 8;
+                }
+                if (xx >= 0x100) {
+                    xx >>= 8;
+                    r <<= 4;
+                }
+                if (xx >= 0x10) {
+                    xx >>= 4;
+                    r <<= 2;
+                }
+                if (xx >= 0x8) {
+                    r <<= 1;
+                }
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1;
+                r = (r + x / r) >> 1; // Seven iterations should be enough
+                uint256 r1 = x / r;
+                return uint128(r < r1 ? r : r1);
+            }
+        }
+    }
+}
+
+
+// File contracts/StakingPool.sol
+
+pragma solidity ^0.8.6;
+
+
+
+contract StakingPool {
+	using ABDKMath64x64 for int128;
+	using RolesLibrary for address;
+
+	address public claimManager;
+
+	uint256 public start;
+	uint256 public end;
+
+	uint256 public hourlyRatio;
+	uint256 public hardCap;
+	uint256 public contributionLimit;
+
+	uint256 public totalStaked;
+
+	bytes32[] private patronRoles;
+	bytes32 private ownerRole;
+
+	uint256 private remainingRewards;
+	uint256 private futureRewards;
+
+	bool public sweeped;
+
+	address internal initiator;
+
+	struct Stake {
+		uint256 deposit;
+		uint256 compounded;
+		uint256 time;
+		uint256 futureReward;
+	}
+
+	event StakeAdded(address indexed sender, uint256 amount, uint256 time);
+	event StakeWithdrawn(address indexed sender, uint256 amount);
+	event StakingPoolInitialized(uint256 funded, uint256 timestamp);
+
+	mapping(address => Stake) public stakes;
+
+	modifier onlyOwner() virtual {
+		// restrict to accounts enrolled as owner at energyweb
+		require(
+			msg.sender.isOwner(claimManager, ownerRole),
+			"OnlyOwner: Not an owner"
+		);
+		_;
+	}
+
+	modifier onlyPatrons(address _agent) virtual {
+		// checking patron role with claimManager
+		require(
+			_agent.hasRole(claimManager, patronRoles),
+			"StakingPool: Not a patron"
+		);
+		_;
+	}
+
+	modifier belowContributionLimit() {
+		require(
+			stakes[msg.sender].deposit + msg.value <= contributionLimit,
+			"Stake greater than contribution limit"
+		);
+		_;
+	}
+
+	modifier initialized() {
+		require(start != 0, "Staking Pool not initialized");
+		_;
+	}
+
+	modifier preventReset() {
+		require(start == 0, "Staking Pool already initialized");
+		_;
+	}
+
+	constructor(bytes32 _ownerRole, address _claimManager) {
+		ownerRole = _ownerRole;
+		claimManager = _claimManager;
+	}
+
+	function init(
+		uint256 _start,
+		uint256 _end,
+		uint256 _hourlyRatio,
+		uint256 _hardCap,
+		uint256 _contributionLimit,
+		bytes32[] memory _patronRoles
+	) external payable onlyOwner preventReset {
+		require(
+			_start >= block.timestamp,
+			"Start date should be at least current block timestamp"
+		);
+		// check if stake pool time is at least 1 day
+		require(_end - _start >= 1 days, "Duration should be at least 1 day");
+		require(_hardCap >= _contributionLimit, "hardCap exceeded");
+
+		uint256 maxFutureRewards = compound(
+			_hourlyRatio,
+			_hardCap,
+			_start,
+			_end
+		) - _hardCap;
+
+		require(msg.value >= maxFutureRewards, "Rewards lower than expected");
+
+		start = _start;
+		end = _end;
+		hourlyRatio = _hourlyRatio;
+		hardCap = _hardCap;
+		contributionLimit = _contributionLimit;
+		patronRoles = _patronRoles;
+
+		remainingRewards = msg.value;
+
+		initiator = msg.sender;
+
+		emit StakingPoolInitialized(msg.value, block.timestamp);
+	}
+
+	function terminate() external initialized onlyOwner {
+		require(start >= block.timestamp, "Cannot terminate after start");
+
+		uint256 payout = remainingRewards;
+		address receipient = initiator;
+
+		delete start;
+		delete end;
+		delete hourlyRatio;
+		delete hardCap;
+		delete contributionLimit;
+		delete patronRoles;
+		delete initiator;
+
+		payable(receipient).transfer(payout);
+	}
+
+	function stake()
+		public
+		payable
+		onlyPatrons(msg.sender)
+		initialized
+		belowContributionLimit
+	{
+		// check role with claimManager
+		require(block.timestamp >= start, "Staking pool not yet started");
+		require(block.timestamp <= end, "Staking pool already expired");
+
+		require(hardCap - totalStaked >= msg.value, "Staking pool is full");
+
+		(, uint256 compounded) = total();
+
+		updateStake(
+			stakes[msg.sender].deposit + msg.value,
+			compounded + msg.value
+		);
+		accountFutureReward();
+
+		totalStaked += msg.value;
+
+		emit StakeAdded(msg.sender, msg.value, block.timestamp);
+	}
+
+	function unstake(uint256 value) public initialized {
+		(uint256 deposit, uint256 compounded) = total();
+
+		require(compounded > 0, "No funds available");
+
+		require(
+			compounded >= value,
+			"Requested value above the compounded funds"
+		);
+
+		uint256 depositComponent = value <= deposit ? value : deposit;
+		uint256 rewardComponent = value > deposit ? value - deposit : 0;
+
+		if (value == compounded) {
+			delete stakes[msg.sender];
+		} else {
+			updateStake(
+				stakes[msg.sender].deposit - depositComponent,
+				compounded - value
+			);
+			accountFutureReward();
+		}
+
+		futureRewards -= rewardComponent;
+		remainingRewards -= rewardComponent;
+		totalStaked -= depositComponent;
+
+		payable(msg.sender).transfer(value);
+
+		emit StakeWithdrawn(msg.sender, value);
+	}
+
+	//allow specifing the value
+	function unstakeAll() public initialized {
+		(, uint256 compounded) = total();
+
+		unstake(compounded);
+	}
+
+	function sweep() public initialized onlyOwner {
+		require(!sweeped, "Already sweeped");
+		require(block.timestamp >= end, "Cannot sweep before expiry");
+
+		uint256 payout = remainingRewards - futureRewards;
+
+		sweeped = true;
+
+		payable(initiator).transfer(payout);
+	}
+
+	function calculateFutureReward() private view returns (uint256) {
+		return
+			compound(
+				hourlyRatio,
+				stakes[msg.sender].compounded,
+				block.timestamp,
+				end
+			) - stakes[msg.sender].deposit;
+	}
+
+	function accountFutureReward() private {
+		uint256 futureReward = calculateFutureReward();
+
+		futureRewards -= stakes[msg.sender].futureReward;
+		futureRewards += futureReward;
+
+		stakes[msg.sender].futureReward = futureReward;
+	}
+
+	function updateStake(uint256 deposit, uint256 compounded) private {
+		stakes[msg.sender].deposit = deposit;
+		stakes[msg.sender].compounded = compounded;
+		if (block.timestamp - stakes[msg.sender].time >= 1 hours) {
+			stakes[msg.sender].time = block.timestamp;
+		}
+	}
+
+	function total() public view returns (uint256, uint256) {
+		Stake memory senderStake = stakes[msg.sender];
+
+		// checks if there is no stake added
+		if (senderStake.time == 0) {
+			return (0, 0);
+		}
+
+		uint256 compoundEnd = block.timestamp > end ? end : block.timestamp;
+
+		uint256 compounded = compound(
+			hourlyRatio,
+			senderStake.compounded,
+			senderStake.time,
+			compoundEnd
+		);
+
+		return (senderStake.deposit, compounded);
+	}
+
+	function compound(
+		uint256 ratio,
+		uint256 principal,
+		uint256 compoundStart,
+		uint256 compoundEnd
+	) public view returns (uint256) {
+		uint256 n = (compoundEnd - compoundStart) / 1 hours;
+
+		return
+			ABDKMath64x64.mulu(
+				ABDKMath64x64.pow(
+					ABDKMath64x64.add(
+						ABDKMath64x64.fromUInt(1),
+						ABDKMath64x64.divu(ratio, 10**18)
+					),
+					n
+				),
+				principal
+			);
+	}
+}
+
+pragma solidity ^0.8.6;
+
+contract StakingPoolNoKYC is StakingPool {
+	modifier onlyOwner() override {
+		// restrict to the account that was set as initiator
+		require(msg.sender == initiator, "OnlyOwner: Not an owner");
+		_;
+	}
+
+	modifier onlyPatrons(address _agent) override {
+		// no role check, just pass
+		_;
+	}
+
+	constructor(address _initiator) StakingPool(bytes32(0), address(0)) {
+		require(_initiator != address(0));
+
+		initiator = _initiator;
+	}
+}

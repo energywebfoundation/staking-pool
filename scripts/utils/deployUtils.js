@@ -13,7 +13,9 @@ const deployContract = async (contractName) => {
   const Contract = await ethers.getContractFactory(contractName);
   try {
     const ownerRole = parseRole("owner.roles.stakingpool.apps.energyweb.iam.ewc");
-    const VOLTA_CLAIM_MANAGER_ADDRESS = "0xC3dD7ED75779b33F5Cfb709E0aB02b71fbFA3210";
+    const _ownerRole = parseRole("email.roles.verification.apps.energyweb.iam.ewc");
+    //const VOLTA_CLAIM_MANAGER_ADDRESS = "0xC3dD7ED75779b33F5Cfb709E0aB02b71fbFA3210"; //dev
+    const VOLTA_CLAIM_MANAGER_ADDRESS = "0x561785174DF7f564f2591bA52B253c0F663427aB"; //staging
 
     const deployedContract = await Contract.deploy(ownerRole, VOLTA_CLAIM_MANAGER_ADDRESS);
     displayContractInfos(contractName, deployedContract);
