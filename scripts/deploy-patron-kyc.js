@@ -3,30 +3,51 @@ const prompt = require("prompt-sync")();
 const emoji = require("node-emoji");
 const { ethers } = require("hardhat");
 
-const displayContractInfos = async (_contractName, _contract) => {
+const displayContractInfos = (_contractName, _contract) => {
   console.log(`\n[ ${_contractName}'s infos ]`);
   console.log(`\tAddress: ${_contract.address}\n`);
 };
 
-const deployContract = async (contractName) => {
-  const answer = prompt("Deploy? (Y/n)");
+const checkAnswer = (answer, promptMode = "noLoop") => {
+  const isInvalid = (answer) => (answer !== "n" && answer !== "N" && answer !== "Y" && answer !== "y");
+    if (promptMode === "loop"){
+      while (isInvalid(answer)){
+        console.log(`\t${emoji.emojify(":rotating_light:")} Invalid option \" ${answer}\" ... Please choose a valid option !`);
+        answer = prompt("Init? (Y/n) ");
+      }
+    } else {
+      if (isInvalid(answer)){
+        console.log(`\t${emoji.emojify(":x:")} \"${answer}\" is not a valid option. Aborting ...`);
+      }
+    }
+    if (answer !== "Y" && answer != "y") {
+        process.exit(0);
+    }
+}
 
-  if (answer === "n") {
-    process.exit(0);
-  }
-
-  const Contract = await ethers.getContractFactory(contractName);
-
-  // const initiator = "0x7aB78e40666E18fB8bA9998f2A8201257e6890de";
-  // const VOLTA_CLAIM_MANAGER_ADDRESS = "0x23b026631A6f265d17CFee8aa6ced1B244f3920C";
-
-  const initiator = Contract.signer.address;
+const getClaimManagerAddress = (hardhatNetwork) => {
+  const EWC_CLAIM_MANAGER_ADDRESS = "0x23b026631A6f265d17CFee8aa6ced1B244f3920C";
   const VOLTA_CLAIM_MANAGER_ADDRESS = "0xC3dD7ED75779b33F5Cfb709E0aB02b71fbFA3210";
 
+  return hardhatNetwork === 'ewc' ? EWC_CLAIM_MANAGER_ADDRESS : VOLTA_CLAIM_MANAGER_ADDRESS;
+}
+
+const deployContract = async (contractName) => {
+  const answer = prompt("Deploy? (Y/n) ");
+
+  checkAnswer(answer);
+  console.log(`\t${emoji.emojify(":hourglass_flowing_sand:")} Deploying ${contractName} ...`);
+  
+  const Contract = await ethers.getContractFactory(contractName);
+
+  const initiator = Contract.signer.address;
+
+  const claimManagerAddress = getClaimManagerAddress(process.env.HARDHAT_NETWORK);
+
   try {
-    const deployedContract = await Contract.deploy(initiator, VOLTA_CLAIM_MANAGER_ADDRESS);
+    const deployedContract = await Contract.deploy(initiator, claimManagerAddress);
     displayContractInfos(contractName, deployedContract);
-    console.log(`${emoji.emojify(":large_green_circle:")} ${contractName} deployed`);
+    console.log(`${emoji.emojify(":large_green_circle:")} ${contractName} deployed ${emoji.emojify(":rocket:")}`);
 
     return deployedContract;
   } catch (error) {
@@ -45,17 +66,26 @@ const initializeContract = async (_deployedContract) => {
   const patronRoles = [ethers.utils.namehash("email.roles.verification.apps.energyweb.iam.ewc")];
   const rewards = (await _deployedContract.compound(ratio, hardCap, start, end)).sub(hardCap);
 
+  const answer = prompt("Do you want to initialize the contract ? (Y/n) ");
+  checkAnswer(answer, "loop");
+
+  console.log(`
+  \t${emoji.emojify(":fuelpump:")} Initializing contract ...`
+  );
   console.log(
-    `Init params: start=${start} end=${end} ratio=${ratio} hardCap=${hardCap} limit=${contributionLimit} patronRoles=${patronRoles} value=${rewards.toString()} valueEWC=${ethers.utils.formatEther(
-      rewards,
-    )}`,
+    `\t\tInit params:
+
+          start = ${start} 
+          end = ${end} 
+          ratio = ${ratio} 
+          hardCap = ${hardCap} 
+          limit = ${contributionLimit} 
+          patronRoles = ${patronRoles} 
+          value = ${rewards.toString()} 
+          valueEWC = ${ethers.utils.formatEther(rewards)}
+    `,
   );
 
-  const answer = prompt("Init? (Y/n)");
-
-  if (answer === "n") {
-    process.exit(0);
-  }
 
   try {
     const tx = await _deployedContract.init(
@@ -70,14 +100,15 @@ const initializeContract = async (_deployedContract) => {
       { value: rewards },
     );
 
-    console.log("Transaction >> ", tx.hash);
+    console.log(`\t Transaction hash :  ${tx.hash}\n`);
 
     await tx.wait();
 
     console.log(
-      `${emoji.emojify(":large_green_circle:")} Staking Pool ${_deployedContract.address} initialized start: ${new Date(
-        start * 1000,
-      ).toLocaleString()} end: ${new Date(end * 1000).toLocaleString()} \n`,
+      `${emoji.emojify(":large_green_circle:")} Staking Pool ${_deployedContract.address} initialized
+      
+      \t* start date : ${new Date(start * 1000).toLocaleString()}
+      \t* end   date : ${new Date(end * 1000).toLocaleString()} \n`,
     );
   } catch (error) {
     console.log(
