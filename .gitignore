@@ -4,6 +4,7 @@
 /reports/
 /cache/
 /artifacts/
+/contracts/artifacts/
 /@rerun.txt
 /usage.txt
 /ethers
