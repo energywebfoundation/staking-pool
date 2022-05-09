@@ -26,7 +26,8 @@
     "prepare": "git apply --ignore-whitespace patches/@ensdomains+ens-contracts+0.0.4.patch && is-ci || husky install",
     "lint": "npx eslint . --ext .ts --fix",
     "hardhat:coverage": "npx hardhat coverage",
-    "hardhat:lint": "npx hardhat check"
+    "hardhat:lint": "npx hardhat check",
+    "snapshots:calculate": "npx hardhat run scripts/snapshot-calculator.ts"
   },
   "author": "Piotr Kosiński, Kevin Nzeng, Krzysztof Szostak",
   "license": "MIT",
@@ -115,6 +116,8 @@
     ]
   },
   "dependencies": {
+    "eth-revert-reason": "^1.0.3",
+    "fs": "^0.0.1-security",
     "prompt-sync": "^4.2.0"
   }
 }
