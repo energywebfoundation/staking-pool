@@ -68,7 +68,7 @@ const getStakers = async (
   const logs = await provider.getLogs({
     address: stakingPoolAddress,
     topics: ["0x270d6dd254edd1d985c81cf7861b8f28fb06b6d719df04d90464034d43412440"], // Ref of topic corresponding to `StakeAdded` event
-    fromBlock: fromBlockNumber,
+    fromBlock: fromBlockNumber, //should it always be 0 ?
     toBlock: toBlockNumber,
   });
 
