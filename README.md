@@ -101,4 +101,84 @@ In order to build after a successful `clone`:
 * run following command
 > `npm deploy:volta`
 
-More information to come...
+## Snapshot Calculator
+
+The `snapshot-calculator.ts` script inside the `scripts` folder generates a JSON file providing a `snapshot` (i.e a list of DIDs with a given staking on a certain day).
+
+Before running the script, make sure to provide the following `snapshot parameters` inside the `.env` file :
+
+- `PRIV_KEY`: The private key of the wallet from which to query the `staking contract`.
+- `SNAPSHOT_START_BLOCK`: the blocknumber representing a the beginning of the scope of the current snapshot
+- `SNAPSHOT_END_BLOCK`: the blocknumber representing a the end of the scope of the current snapshot
+- `SNAPSHOT_MIN_BALANCE`: The minimal amount that should be taken in account for the current snapshot
+- `STAKINGPOOL`: The address of the `staking contract`.
+
+If those values are not set in the `.env`, default values will be given to those variable inside the script in the `initSnapshot` function.
+
+#### Content of the .env file
+```
+PRIV_KEY = <Wallet_private_key>
+SNAPSHOT_START_BLOCK = 17810000
+SNAPSHOT_END_BLOCK = 17816744
+SNAPSHOT_MIN_BALANCE = 1500
+STAKINGPOOL = "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
+```
+
+To run the `snapshot-calculator` script, enter the following command in your terminal :
+
+```javascript
+npm run snapshots:calculate
+```
+> Note that this script can take some time to query and filter all the transactions according the the `snapshot parameters`
+
+The created JSON file will be named `stakingSnapshot_<UTC_DATE_TIME>.json` and will have the following structure :
+
+```json
+{
+ "credentialNamespace": "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
+ "credentials": [
+  {
+   "did": "did:ethr:ewc:0x...90a307eedd4d3dd887873d20d265...",
+   "issuerFields": [
+    {
+     "stakeAmount": 2006.09,
+     "minimumBalance": 1500,
+     "snapshotBlock": 17813339,
+     "chainId": 246,
+     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
+     "stakingDate": 1652073635,
+     "transactionHash": "0x...1a2c4470bcef6430d6c2b2dbf8f72c894200e2c864d..."
+    }
+   ]
+  },
+  {
+   "did": "did:ethr:ewc:0x....ac1604452b7e9683ad82474b746a0cfe....",
+   "issuerFields": [
+    {
+     "stakeAmount": 3000,
+     "minimumBalance": 1500,
+     "snapshotBlock": 17810350,
+     "chainId": 246,
+     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
+     "stakingDate": 1652058320,
+     "transactionHash": "0x....fe24e016626f17c3014e9c2aec0276f9e4cf6a989a69d9758ea4144f...."
+    }
+   ]
+  },
+  {
+   "did": "did:ethr:ewc:0x....6ccf13df603a210a413bc2d0910c4317....",
+   "issuerFields": [
+    {
+     "stakeAmount": 3000,
+     "minimumBalance": 1500,
+     "snapshotBlock": 17810407,
+     "chainId": 246,
+     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
+     "stakingDate": 1652058615,
+     "transactionHash": "0x....46d87954237d6914acf16a632c5dd49d82bb047d89915de9235303d0...."
+    }
+   ]
+  }
+ ]
+}
+```
