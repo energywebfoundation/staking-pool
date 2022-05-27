@@ -5,16 +5,10 @@ export type Snapshot = {
       chainId: number;
       stakeAmount: number;
       stakingDate?: number;
-      snapshotBlock: number;
+      snapshotBlock?: number;
       minimumBalance: number;
       transactionHash?: string;
       stakingPoolAddress: string;
     },
   ];
-};
-
-export type StakingLog = {
-  address: string;
-  blockNumber: number;
-  transactionHash: string;
 };
