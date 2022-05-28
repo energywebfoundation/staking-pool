@@ -64,12 +64,12 @@ const calculateSnapshot = async (
       try {
         do {
           stakingAmount = await _rpcReadContractSlot(STAKES_STORAGE_SLOT, currentAddress, rpcProvider, blockNumber);
-          if (stakingAmount == null) {
+          if (stakingAmount === null) {
             nodeEmoji.emojify(":x:", "RPC connection broke ... Recalculate ", currentAddress);
           } else {
             console.log(nodeEmoji.emojify(":white_check_mark:"), currentAddress);
           }
-        } while (stakingAmount == null);
+        } while (stakingAmount === null);
 
         if (stakingAmount >= minBalance) {
           snapshots.push({
@@ -122,7 +122,7 @@ export const takeSnapShot = async (chainID: number, blockNumber: number, minimum
     snaphotBlock: blockNumber,
     credentials: [...new Set(snapshotContent)],
   };
-  writeFileSync(`stakingSnapshot_${new Date().toJSON()}.json`, JSON.stringify(snapshot, null, " "));
+  writeFileSync(`snapshots/stakingSnapshot_${new Date().toJSON()}.json`, JSON.stringify(snapshot, null, " "));
 };
 
 takeSnapShot(EW_CHAIN_ID, blockNumber, minBalance)
