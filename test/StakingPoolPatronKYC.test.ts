@@ -1,7 +1,11 @@
 import { expect, use } from "chai";
+import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { StakingPool } from "../ethers";
 import { Wallet, utils, BigNumber } from "ethers";
+import { Block } from "@ethersproject/abstract-provider";
 import { claimManagerABI } from "./utils/claimManager_abi";
+import { takeSnapShot } from "../scripts/snapshot-calculator";
 import { deployMockContract } from "@ethereum-waffle/mock-contract";
 import { deployContract, loadFixture, MockProvider, solidity } from "ethereum-waffle";
 import StakingPoolContract from "../artifacts/contracts/StakingPoolPatronKYC.sol/StakingPoolPatronKYC.json";
@@ -388,6 +392,56 @@ describe("Staking Pool Patron KYC", function () {
 
       expect(deposit).to.be.equal(BigNumber.from(0));
       expect(compounded).to.be.equal(BigNumber.from(0));
+    });
+  });
+
+  describe("Snapshots", async () => {
+    let tx;
+    let lastBlock: Block;
+    it("Should create snaphShot from a single block", async () => {
+      const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
+      tx = await asPatron2.stake({ value: oneEWT.mul(5) });
+      await tx.wait();
+
+      tx = await asPatron1.stake({ value: oneEWT.mul(20) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+      const expectedSnapshot1 = readFileSync(resolve(__dirname, "utils", "snapshot_1_test.json"), {
+        encoding: "utf8",
+      });
+
+      //snapshot1
+      const snaphsot1FileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number, 1, provider);
+      const snapshot1 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1FileName), {
+        encoding: "utf8",
+      });
+
+      expect(snapshot1).to.equal(expectedSnapshot1);
+
+      tx = await asPatron2.stake({ value: oneEWT.mul(10) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+
+      //snapshot2
+      const snaphsot2FileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number, 1, provider);
+      const snapshot2 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot2FileName), {
+        encoding: "utf8",
+      });
+
+      const expectedSnapshot2 = readFileSync(resolve(__dirname, "utils", "snapshot_2_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot2).to.equal(expectedSnapshot2);
+
+      //snapshot with a prior blockNumber
+      const snaphsot1RetroFileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number - 1, 1, provider);
+      const snapshotRetro = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1RetroFileName), {
+        encoding: "utf8",
+      });
+
+      expect(snapshotRetro).to.equal(expectedSnapshot1);
     });
   });
 
