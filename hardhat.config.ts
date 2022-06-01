@@ -29,6 +29,13 @@ module.exports = {
       accounts: [deployer_privateKey],
       gasPrice: 1000000000,
     },
+    hardhat: {
+      mining: {
+        auto: false,
+        interval: [1000, 2000],
+      },
+      gasPrice: 1000000000,
+    },
   },
   typechain: {
     outDir: "ethers",
