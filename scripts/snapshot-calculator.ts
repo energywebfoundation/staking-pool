@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { ethers } from "hardhat";
 import { writeFileSync } from "node:fs";
-import { Log } from "@ethersproject/providers";
+import { Log, JsonRpcProvider } from "@ethersproject/providers";
 import { Contract, Wallet, providers } from "ethers";
 import { Snapshot } from "./types/snapshot.types";
 import { getRpc, EW_CHAIN_ID, formatDID, _rpcReadContractSlot } from "./utils/snapshot.utils";
@@ -11,13 +11,10 @@ let stakingContract: Contract;
 let failingCalculations: string[] = [];
 
 const STAKES_STORAGE_SLOT = 12;
-const snapshots: Snapshot[] = [];
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const nodeEmoji = require("node-emoji");
 const wallet = new Wallet(`${process.env.PRIV_KEY}`);
 const blockNumber = Number(process.env.SNAPSHOT_BLOCKNUMBER);
-const minBalance = Number(process.env.SNAPSHOT_MIN_BALANCE) || 10;
-const stakingAddress = process.env.STAKINGPOOL || "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A";
 
 const parseEvents = async (stakeLogs: Log[]) => {
   const stakers: string[] = [];
@@ -36,10 +33,9 @@ const parseEvents = async (stakeLogs: Log[]) => {
 };
 
 const getStakers = async (blockNumber: number, minStakedAmount: number, stakingPoolAddress: string, provider: any) => {
-  stakingContract = (await ethers.getContractFactory("StakingPool", wallet.connect(provider))).attach(
+  stakingContract = (await ethers.getContractFactory("StakingPoolPatronKYC", wallet.connect(provider))).attach(
     stakingPoolAddress,
   );
-
   const stakingLogs = await provider.getLogs({
     address: stakingPoolAddress,
     topics: ["0x270d6dd254edd1d985c81cf7861b8f28fb06b6d719df04d90464034d43412440"], // Ref of topic corresponding to `StakeAdded` event
@@ -57,13 +53,24 @@ const calculateSnapshot = async (
   chainID: number,
   rpcProvider: providers.JsonRpcProvider,
   blockNumber: number,
+  minBalance: number,
+  _stakingAddress?: string,
 ) => {
+  const _stakingContract = _stakingAddress ? _stakingAddress : process.env.STAKINGPOOL;
+  const snapshots: Snapshot[] = [];
+
   await Promise.all(
     _stakers.map(async (currentAddress) => {
       let stakingAmount = null;
       try {
         do {
-          stakingAmount = await _rpcReadContractSlot(STAKES_STORAGE_SLOT, currentAddress, rpcProvider, blockNumber);
+          stakingAmount = await _rpcReadContractSlot(
+            STAKES_STORAGE_SLOT,
+            currentAddress,
+            rpcProvider,
+            blockNumber,
+            _stakingContract,
+          );
           if (stakingAmount === null) {
             nodeEmoji.emojify(":x:", "RPC connection broke ... Recalculate ", currentAddress);
           } else {
@@ -71,7 +78,7 @@ const calculateSnapshot = async (
           }
         } while (stakingAmount === null);
 
-        if (stakingAmount >= minBalance) {
+        if (Number(stakingAmount) >= minBalance) {
           snapshots.push({
             did: formatDID(currentAddress, chainID),
             issuerFields: [
@@ -79,7 +86,7 @@ const calculateSnapshot = async (
                 stakeAmount: Number(stakingAmount),
                 minimumBalance: minBalance,
                 chainId: chainID,
-                stakingPoolAddress: stakingAddress,
+                stakingPoolAddress: _stakingContract as string,
               },
             ],
           });
@@ -104,30 +111,45 @@ const calculateSnapshot = async (
   return snapshots;
 };
 
-export const takeSnapShot = async (chainID: number, blockNumber: number, minimumBalance: number) => {
+export const takeSnapShot = async (
+  _contractAddress: string,
+  chainID: number,
+  blockNumber: number,
+  minimumBalance: number,
+  provider: providers.JsonRpcProvider,
+) => {
   const rpcUrl = getRpc(chainID);
-  const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
-  const stakersList = await getStakers(blockNumber, minimumBalance, stakingAddress, provider);
+  console.log(`Taking snapshoht on block ${blockNumber} of staking contract ${_contractAddress}`);
+  const stakersList = await getStakers(blockNumber, minimumBalance, _contractAddress, provider);
 
-  let snapshotContent = await calculateSnapshot(stakersList, EW_CHAIN_ID, provider, blockNumber);
+  let snapshotContent = await calculateSnapshot(
+    stakersList,
+    chainID,
+    provider,
+    blockNumber,
+    minimumBalance,
+    _contractAddress,
+  );
   //We keep calculating all previously failing snapshots
   while (failingCalculations.length != 0) {
     console.log("Error size :: ", failingCalculations.length);
-    const failingSnapshot = await calculateSnapshot(failingCalculations, EW_CHAIN_ID, provider, blockNumber);
+    const failingSnapshot = await calculateSnapshot(
+      failingCalculations,
+      EW_CHAIN_ID,
+      provider,
+      blockNumber,
+      minimumBalance,
+      _contractAddress,
+    );
     snapshotContent = snapshotContent.concat(failingSnapshot);
   }
 
   const snapshot = {
     credentialNamespace: "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
-    snaphotBlock: blockNumber,
+    snapshotBlock: blockNumber,
     credentials: [...new Set(snapshotContent)],
   };
-  writeFileSync(`snapshots/stakingSnapshot_${new Date().toJSON()}.json`, JSON.stringify(snapshot, null, " "));
+  const fileName = `stakingSnapshot_${new Date().toJSON()}.json`;
+  writeFileSync(`snapshots/${fileName}`, JSON.stringify(snapshot, null, " "));
+  return fileName;
 };
-
-takeSnapShot(EW_CHAIN_ID, blockNumber, minBalance)
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
