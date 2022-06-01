@@ -17,11 +17,13 @@ export const EW_CHAIN_ID = 246;
 export const getRpc = (chainID: number) => {
   switch (chainID) {
     case VOLTA_CHAIN_ID:
-      return "https://volta-rpc.energyweb.org";
+      return "https://volta-archive-rpc.energyweb.org";
     case EW_CHAIN_ID:
       return "https://archive-rpc.energyweb.org";
+    case 1337:
+      return "http://127.0.0.1:8545";
     default:
-      throw new Error(`${chainID} is not a Chain Iditifier`);
+      throw new Error(`${chainID} is not a valid chain Iditifier`);
   }
 };
 
@@ -35,13 +37,18 @@ export const formatHex = (data: string) => {
 export const _rpcReadContractSlot = async (
   slotNumber: number,
   stakerAddress: string,
-  provider: ethers.providers.JsonRpcProvider,
+  provider: ethers.providers.JsonRpcProvider | ethers.providers.Web3Provider,
   blockNumber?: number,
+  _contractAddress?: string,
 ) => {
   const formattedSlot = `${formatHex(stakerAddress)}${formatHex(utils.hexValue(slotNumber)).substring(2)}`;
   try {
     const position = ethers.utils.keccak256(formattedSlot);
-    const stakeAmount = await provider.getStorageAt(contractAddress, position, blockNumber || "latest");
+    const stakeAmount = await provider.getStorageAt(
+      _contractAddress || contractAddress,
+      position,
+      blockNumber || "latest",
+    );
     return formatAmount(BigNumber.from(stakeAmount));
   } catch (err) {
     return null;
