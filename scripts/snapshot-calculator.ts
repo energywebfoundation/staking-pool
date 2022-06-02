@@ -2,7 +2,7 @@ import { config } from "dotenv";
 import { ethers } from "hardhat";
 import { writeFileSync } from "node:fs";
 import { Log, JsonRpcProvider } from "@ethersproject/providers";
-import { Contract, Wallet, providers } from "ethers";
+import { Contract, Wallet, providers, utils } from "ethers";
 import { Snapshot } from "./types/snapshot.types";
 import { getRpc, EW_CHAIN_ID, formatDID, _rpcReadContractSlot } from "./utils/snapshot.utils";
 
@@ -22,7 +22,7 @@ const parseEvents = async (stakeLogs: Log[]) => {
     stakeLogs.map(async (currentLog) => {
       if (currentLog.blockNumber <= blockNumber) {
         //Removing the padding zeros
-        const currentAddress = `0x${currentLog.topics[1].substring(26)}`;
+        const currentAddress = utils.hexStripZeros(currentLog.topics[1]);
         if (!stakers.includes(currentAddress)) {
           stakers.push(currentAddress);
         }
@@ -32,7 +32,12 @@ const parseEvents = async (stakeLogs: Log[]) => {
   return stakers;
 };
 
-const getStakers = async (blockNumber: number, minStakedAmount: number, stakingPoolAddress: string, provider: any) => {
+const getStakers = async (
+  blockNumber: number,
+  minStakedAmount: number,
+  stakingPoolAddress: string,
+  provider: JsonRpcProvider,
+) => {
   stakingContract = (await ethers.getContractFactory("StakingPoolPatronKYC", wallet.connect(provider))).attach(
     stakingPoolAddress,
   );
