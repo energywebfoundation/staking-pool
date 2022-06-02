@@ -13,7 +13,7 @@ let failingCalculations: string[] = [];
 const STAKES_STORAGE_SLOT = 12;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const nodeEmoji = require("node-emoji");
-const wallet = new Wallet(`${process.env.PRIV_KEY}`);
+const wallet = new Wallet("9d69bf3c7bda0fc771a59818e5a7f894f3b4fbd3114891db3d4de7f46aa71ca8");
 const blockNumber = Number(process.env.SNAPSHOT_BLOCKNUMBER);
 
 const parseEvents = async (stakeLogs: Log[]) => {
