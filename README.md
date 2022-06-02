@@ -129,13 +129,14 @@ To run the `snapshot-calculator` script, enter the following command in your ter
 ```javascript
 npm run snapshots:calculate
 ```
-> Note that this script can take some time to query and filter all the transactions according the the `snapshot parameters`
+> Note that this script can take some time to query and filter all the transactions according to the `snapshot parameters`
 
 The created JSON file will be named `stakingSnapshot_<UTC_DATE_TIME>.json` and will have the following structure :
 
 ```json
 {
  "credentialNamespace": "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
+ "snapshotBlock": 17813339,
  "credentials": [
   {
    "did": "did:ethr:ewc:0x...90a307eedd4d3dd887873d20d265...",
@@ -143,11 +144,8 @@ The created JSON file will be named `stakingSnapshot_<UTC_DATE_TIME>.json` and w
     {
      "stakeAmount": 2006.09,
      "minimumBalance": 1500,
-     "snapshotBlock": 17813339,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
-     "stakingDate": 1652073635,
-     "transactionHash": "0x...1a2c4470bcef6430d6c2b2dbf8f72c894200e2c864d..."
     }
    ]
   },
@@ -157,11 +155,8 @@ The created JSON file will be named `stakingSnapshot_<UTC_DATE_TIME>.json` and w
     {
      "stakeAmount": 3000,
      "minimumBalance": 1500,
-     "snapshotBlock": 17810350,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
-     "stakingDate": 1652058320,
-     "transactionHash": "0x....fe24e016626f17c3014e9c2aec0276f9e4cf6a989a69d9758ea4144f...."
     }
    ]
   },
@@ -171,11 +166,8 @@ The created JSON file will be named `stakingSnapshot_<UTC_DATE_TIME>.json` and w
     {
      "stakeAmount": 3000,
      "minimumBalance": 1500,
-     "snapshotBlock": 17810407,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A",
-     "stakingDate": 1652058615,
-     "transactionHash": "0x....46d87954237d6914acf16a632c5dd49d82bb047d89915de9235303d0...."
     }
    ]
   }
