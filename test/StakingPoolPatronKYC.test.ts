@@ -398,7 +398,7 @@ describe("Staking Pool Patron KYC", function () {
   describe("Snapshots", async () => {
     let tx;
     let lastBlock: Block;
-    it("Should create snaphShot from a single block", async () => {
+    it("Should create snaphShots", async () => {
       const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
       tx = await asPatron2.stake({ value: oneEWT.mul(5) });
       await tx.wait();
