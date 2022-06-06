@@ -1,6 +1,6 @@
 {
  "credentialNamespace": "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
- "snapshotBlock": 9,
+ "snapshotBlock": 10,
  "credentials": [
   {
    "did": "did:ethr:volta:0xd59ca627af68d29c547b91066297a7c469a7bf72",

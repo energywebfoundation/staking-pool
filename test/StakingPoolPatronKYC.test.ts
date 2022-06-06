@@ -37,7 +37,7 @@ describe("Staking Pool Patron KYC", function () {
   async function fixture(
     hardCap: BigNumber,
     start: number,
-    [owner, owner2, patron1, patron2]: Wallet[],
+    [owner, owner2, patron1, patron2, patron3]: Wallet[],
     provider: MockProvider,
     initializePool = true,
     travel = true,
@@ -64,6 +64,10 @@ describe("Staking Pool Patron KYC", function () {
           .withArgs(patron2.address, patronRoleDef, defaultRoleVersion)
           .returns(true);
 
+        await claimManagerMocked.mock.hasRole
+          .withArgs(patron3.address, patronRoleDef, defaultRoleVersion)
+          .returns(true);
+
         const tx = await asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
           value: rewards,
         });
@@ -86,9 +90,11 @@ describe("Staking Pool Patron KYC", function () {
       stakingPool,
       patron1,
       patron2,
+      patron3,
       owner,
       asPatron1: stakingPool.connect(patron1),
       asPatron2: stakingPool.connect(patron2),
+      asPatron3: stakingPool.connect(patron3),
       asOwner: stakingPool.connect(owner),
       asOwner2: stakingPool.connect(owner2),
       provider,
@@ -398,8 +404,9 @@ describe("Staking Pool Patron KYC", function () {
   describe("Snapshots", async () => {
     let tx;
     let lastBlock: Block;
+    const chainID = 1337;
     it("Should create snaphShots", async () => {
-      const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
+      const { asPatron1, asPatron2, asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
       tx = await asPatron2.stake({ value: oneEWT.mul(5) });
       await tx.wait();
 
@@ -412,7 +419,7 @@ describe("Staking Pool Patron KYC", function () {
       });
 
       //snapshot1
-      const snaphsot1FileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number, 1, provider);
+      const snaphsot1FileName = String(await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider));
       const snapshot1 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1FileName), {
         encoding: "utf8",
       });
@@ -425,7 +432,7 @@ describe("Staking Pool Patron KYC", function () {
       lastBlock = await provider.getBlock("latest");
 
       //snapshot2
-      const snaphsot2FileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number, 1, provider);
+      const snaphsot2FileName = String(await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider));
       const snapshot2 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot2FileName), {
         encoding: "utf8",
       });
@@ -436,12 +443,35 @@ describe("Staking Pool Patron KYC", function () {
       expect(snapshot2).to.equal(expectedSnapshot2);
 
       //snapshot with a prior blockNumber
-      const snaphsot1RetroFileName = await takeSnapShot(stakingPool.address, 1337, lastBlock.number - 1, 1, provider);
+      const snaphsot1RetroFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number - 1, 1, provider),
+      );
       const snapshotRetro = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1RetroFileName), {
         encoding: "utf8",
       });
 
       expect(snapshotRetro).to.equal(expectedSnapshot1);
+    });
+
+    it("should not create a snapshot if a staker stakes lower than the snapshot minimum", async () => {
+      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+
+      tx = await asPatron3.stake({ value: oneEWT.mul(2) });
+      await tx.wait();
+      lastBlock = await provider.getBlock("latest");
+      const snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 5, provider);
+      expect(snapshot).to.be.null;
+    });
+    it("should not create a snapshot if a staker withdraws before the snapshot block", async () => {
+      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minBalance = 15;
+
+      await asPatron3.stake({ value: oneEWT.mul(50) });
+      await asPatron3.unstake(oneEWT.mul(49));
+      lastBlock = await provider.getBlock("latest");
+
+      const _snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minBalance, provider);
+      expect(_snapshot).to.be.null;
     });
   });
 
