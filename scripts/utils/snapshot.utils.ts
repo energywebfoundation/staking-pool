@@ -51,6 +51,7 @@ export const _rpcReadContractSlot = async (
     );
     return formatAmount(BigNumber.from(stakeAmount));
   } catch (err) {
+    console.log("An error occurred :: ", err);
     return null;
   }
 };
