@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import { Log, JsonRpcProvider } from "@ethersproject/providers";
 import { Contract, Wallet, providers, utils } from "ethers";
 import { Snapshot } from "./types/snapshot.types";
-import { getRpc, EW_CHAIN_ID, formatDID, _rpcReadContractSlot } from "./utils/snapshot.utils";
+import { EW_CHAIN_ID, formatDID, _rpcReadContractSlot } from "./utils/snapshot.utils";
 
 config();
 let stakingContract: Contract;
@@ -122,10 +122,7 @@ export const takeSnapShot = async (
   minimumBalance: number,
   provider: providers.JsonRpcProvider,
 ) => {
-  const rpcUrl = getRpc(chainID);
-  console.log(`Taking snapshoht on block ${blockNumber} of staking contract ${_contractAddress}`);
   const stakersList = await getStakers(blockNumber, minimumBalance, _contractAddress, provider);
-
   let snapshotContent = await calculateSnapshot(
     stakersList,
     chainID,
@@ -148,12 +145,17 @@ export const takeSnapShot = async (
     snapshotContent = snapshotContent.concat(failingSnapshot);
   }
 
+  const finalSnapshot = [...new Set(snapshotContent)];
+
   const snapshot = {
     credentialNamespace: "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
     snapshotBlock: blockNumber,
-    credentials: [...new Set(snapshotContent)],
+    credentials: finalSnapshot,
   };
-  const fileName = `stakingSnapshot_${new Date().toJSON()}.json`;
-  writeFileSync(`snapshots/${fileName}`, JSON.stringify(snapshot, null, " "));
-  return fileName;
+  if (finalSnapshot.length !== 0) {
+    const fileName = `stakingSnapshot_${new Date().toJSON()}.json`;
+    writeFileSync(`snapshots/${fileName}`, JSON.stringify(snapshot, null, " "));
+    return fileName;
+  }
+  return null;
 };
