@@ -1,5 +1,8 @@
+import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { BigNumber, ethers, utils } from "ethers";
 import { VOLTA_CHAIN_ID } from "@energyweb/iam-contracts";
+import { StorageLayout } from "../types/snapshot.types";
 
 const contractAddress = "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A";
 
@@ -32,6 +35,43 @@ export const formatHex = (data: string) => {
     return utils.hexZeroPad(utils.hexValue(data), 32);
   }
   return utils.hexZeroPad(data, 32);
+};
+
+export const getSlotNumber = (contractName: string, variableName: string) => {
+  const artifactDebugPath = resolve(
+    __dirname,
+    "../",
+    "../",
+    "artifacts",
+    "contracts",
+    `${contractName}.sol`,
+    `${contractName}.dbg.json`,
+  );
+  const artifactDebug = JSON.parse(
+    readFileSync(artifactDebugPath, {
+      encoding: "utf8",
+    }),
+  );
+
+  const buildInfosPath = artifactDebug.buildInfo;
+  const buildInfos = JSON.parse(
+    readFileSync(resolve(__dirname, "../", "../", "artifacts", "build-info", `${getBuildFileName(buildInfosPath)}`), {
+      encoding: "utf8",
+    }),
+  );
+  const contractBuildInfos = buildInfos["output"]["contracts"][`contracts/${contractName}.sol`][contractName];
+  const storageInfos = contractBuildInfos["storageLayout"]["storage"];
+  const stakeMappingStorage = storageInfos.filter(
+    (storageInfo: StorageLayout) => storageInfo["label"] === variableName,
+  );
+
+  const slotNumber = Number(stakeMappingStorage[0].slot);
+
+  return slotNumber;
+};
+
+const getBuildFileName = (buildPath: string) => {
+  return buildPath.substring("../../build-info/".length);
 };
 
 export const _rpcReadContractSlot = async (
