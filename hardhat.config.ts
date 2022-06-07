@@ -15,8 +15,22 @@ const deployer_privateKey = process.env.DEPLOYER_PRIV_KEY || defaultAccounts[0].
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  solidity: "0.8.6",
   defaultNetwork: "hardhat",
+  solidity: {
+    version: "0.8.6",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      outputSelection: {
+        "*": {
+          "*": ["abi", "evm.bytecode", "evm.deployedBytecode", "evm.methodIdentifiers", "metadata", "storageLayout"],
+          "": ["ast"],
+        },
+      },
+    },
+  },
   networks: {
     volta: {
       url: "https://volta-rpc.energyweb.org",
