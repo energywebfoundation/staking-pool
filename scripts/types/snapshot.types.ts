@@ -12,3 +12,12 @@ export type Snapshot = {
     },
   ];
 };
+
+export type StorageLayout = {
+  astId: number;
+  contract: string;
+  label: string;
+  offset: number;
+  slot: string;
+  type: string;
+};
