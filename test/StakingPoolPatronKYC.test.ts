@@ -453,15 +453,83 @@ describe("Staking Pool Patron KYC", function () {
       expect(snapshotRetro).to.equal(expectedSnapshot1);
     });
 
-    it("should not create a snapshot if a staker stakes lower than the snapshot minimum", async () => {
-      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+    it("should not include a DID which stakes lower than the minimum", async () => {
+      const { asPatron2, asPatron3, provider, stakingPool, patron2 } = await loadFixture(defaultFixture);
+      const minStakeAmount = 5;
 
       tx = await asPatron3.stake({ value: oneEWT.mul(2) });
       await tx.wait();
+
+      tx = await asPatron2.stake({ value: oneEWT.mul(20) });
+      await tx.wait();
+
       lastBlock = await provider.getBlock("latest");
-      const snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 5, provider);
+      let snapshotFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+      );
+      const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
+      const filteredSnapShot = readFileSync(resolve(__dirname, "utils", "filtered_snapshot_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot).to.equal(filteredSnapShot);
+
+      //patron3 adds a new stake to meet snapshot minBalance
+      tx = await asPatron3.stake({ value: oneEWT.mul(10) });
+      await tx.wait();
+
+      //But snapshot on block before restake should not include patron3
+      snapshotFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+      );
+      const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
+        encoding: "utf8",
+      });
+      expect(reStakeSnapshot).to.equal(filteredSnapShot);
+    });
+
+    it("should not create a snapshot if a staker stakes lower than the snapshot minimum", async () => {
+      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minStakeAmount = 5;
+
+      tx = await asPatron3.stake({ value: oneEWT.mul(2) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+      const snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider);
       expect(snapshot).to.be.null;
     });
+
+    it("should not include a DID which withdraws before the snapshot block", async () => {
+      const { asPatron3, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minStakeAmount = 15;
+
+      await asPatron3.stake({ value: oneEWT.mul(50) });
+      await asPatron2.stake({ value: oneEWT.mul(42) });
+      await asPatron3.unstake(oneEWT.mul(49));
+
+      lastBlock = await provider.getBlock("latest");
+
+      let snapshotFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+      );
+      const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
+      const postWithdrawSnapShot = readFileSync(resolve(__dirname, "utils", "postWithdraw_snapshot_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot).to.equal(postWithdrawSnapShot);
+
+      //Patron3 Restakes after snapshot
+      await asPatron3.stake({ value: oneEWT.mul(60) });
+      snapshotFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+      );
+      const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
+        encoding: "utf8",
+      });
+      //Snapshot on block before re-staking should not include DID of patron3
+      expect(reStakeSnapshot).to.equal(postWithdrawSnapShot);
+    });
+
     it("should not create a snapshot if a staker withdraws before the snapshot block", async () => {
       const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
       const minBalance = 15;
