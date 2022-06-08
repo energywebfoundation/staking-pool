@@ -1,46 +1,25 @@
 {
  "credentialNamespace": "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
- "snaphotBlock": 16934055,
  "credentials": [
   {
-   "did": "did:ethr:ewc:0x010349096105e83557fd8ecc2b269d2d2dbff593",
+   "did": "did:ethr:ewc:0x2858205c78eea92b076ea6096acad0554a668a7f",
    "issuerFields": [
     {
-     "stakeAmount": 139,
+     "stakeAmount": 118.9,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
    ]
   },
   {
-   "did": "did:ethr:ewc:0x6ee11fa5334e62dbadfae1e2d4266d0e50abd12f",
-   "issuerFields": [
-    {
-     "stakeAmount": 970.5,
-     "minimumBalance": 100,
-     "chainId": 246,
-     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
-    }
-   ]
-  },
-  {
-   "did": "did:ethr:ewc:0x314c0695273ba259bb60074f2c92c67ac7ae6d40",
+   "did": "did:ethr:ewc:0xb3440e1c04e12efddbee546500fb994b4f1e539",
    "issuerFields": [
     {
      "stakeAmount": 3000,
      "minimumBalance": 100,
-     "chainId": 246,
-     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
-    }
-   ]
-  },
-  {
-   "did": "did:ethr:ewc:0x7c1fe394b817c98eb8804ecd563f532514e89ac2",
-   "issuerFields": [
-    {
-     "stakeAmount": 133.5,
-     "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
@@ -52,17 +31,19 @@
     {
      "stakeAmount": 1162.965,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
    ]
   },
   {
-   "did": "did:ethr:ewc:0x0b3440e1c04e12efddbee546500fb994b4f1e539",
+   "did": "did:ethr:ewc:0x314c0695273ba259bb60074f2c92c67ac7ae6d40",
    "issuerFields": [
     {
      "stakeAmount": 3000,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
@@ -74,6 +55,19 @@
     {
      "stakeAmount": 134.205,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
+     "chainId": 246,
+     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
+    }
+   ]
+  },
+  {
+   "did": "did:ethr:ewc:0x6ee11fa5334e62dbadfae1e2d4266d0e50abd12f",
+   "issuerFields": [
+    {
+     "stakeAmount": 970.5,
+     "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
@@ -85,6 +79,7 @@
     {
      "stakeAmount": 127.678,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
@@ -96,17 +91,31 @@
     {
      "stakeAmount": 545,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }
    ]
   },
   {
-   "did": "did:ethr:ewc:0x2858205c78eea92b076ea6096acad0554a668a7f",
+   "did": "did:ethr:ewc:0x7c1fe394b817c98eb8804ecd563f532514e89ac2",
    "issuerFields": [
     {
-     "stakeAmount": 118.9,
+     "stakeAmount": 133.5,
      "minimumBalance": 100,
+     "snapshotBlock": 16934055,
+     "chainId": 246,
+     "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
+    }
+   ]
+  },
+  {
+   "did": "did:ethr:ewc:0x10349096105e83557fd8ecc2b269d2d2dbff593",
+   "issuerFields": [
+    {
+     "stakeAmount": 139,
+     "minimumBalance": 100,
+     "snapshotBlock": 16934055,
      "chainId": 246,
      "stakingPoolAddress": "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
     }

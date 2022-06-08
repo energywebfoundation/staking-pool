@@ -453,7 +453,7 @@ describe("Staking Pool Patron KYC", function () {
       expect(snapshotRetro).to.equal(expectedSnapshot1);
     });
 
-    it("should not include a DID which stakes lower than the minimum", async () => {
+    it("should not include a staker who stakes the minimum after the snapshot", async () => {
       const { asPatron2, asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
       const minStakeAmount = 5;
 
@@ -499,7 +499,7 @@ describe("Staking Pool Patron KYC", function () {
       expect(snapshot).to.be.null;
     });
 
-    it("should not include a DID which withdraws before the snapshot block", async () => {
+    it("should not include a staker who withdraws before the snapshot block and restakes after the snapshot", async () => {
       const { asPatron3, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
       const minStakeAmount = 15;
 
