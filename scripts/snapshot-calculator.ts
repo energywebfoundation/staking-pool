@@ -89,6 +89,7 @@ const calculateSnapshot = async (
               {
                 stakeAmount: Number(stakingAmount),
                 minimumBalance: minBalance,
+                snapshotBlock: blockNumber,
                 chainId: chainID,
                 stakingPoolAddress: _stakingContract as string,
               },
@@ -149,7 +150,6 @@ export const takeSnapShot = async (
 
   const snapshot = {
     credentialNamespace: "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
-    snapshotBlock: blockNumber,
     credentials: finalSnapshot,
   };
   if (finalSnapshot.length !== 0) {
