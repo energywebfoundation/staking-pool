@@ -19,14 +19,9 @@ module.exports = {
   solidity: {
     version: "0.8.6",
     settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
       outputSelection: {
         "*": {
           "*": ["abi", "evm.bytecode", "evm.deployedBytecode", "evm.methodIdentifiers", "metadata", "storageLayout"],
-          "": ["ast"],
         },
       },
     },
