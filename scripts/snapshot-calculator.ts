@@ -4,7 +4,14 @@ import { writeFileSync } from "node:fs";
 import { Log, JsonRpcProvider } from "@ethersproject/providers";
 import { providers, utils } from "ethers";
 import { Snapshot } from "./types/snapshot.types";
-import { EW_CHAIN_ID, formatDID, rpcReadContractSlot, getSlotNumber } from "./utils/snapshot.utils";
+import {
+  EW_CHAIN_ID,
+  formatDID,
+  rpcReadContractSlot,
+  getSlotNumber,
+  getRpcUrl,
+  isEnvReady,
+} from "./utils/snapshot.utils";
 
 config();
 const failingCalculations = new Set<string>();
@@ -144,3 +151,19 @@ export const takeSnapShot = async (
   }
   return null;
 };
+
+if (isEnvReady()) {
+  const provider = new providers.JsonRpcProvider(getRpcUrl(EW_CHAIN_ID));
+  takeSnapShot(
+    String(process.env.STAKINGPOOL),
+    EW_CHAIN_ID,
+    Number(process.env.SNAPSHOT_BLOCKNUMBER),
+    Number(process.env.SNAPSHOT_MIN_BALANCE),
+    provider,
+  )
+    .then(() => process.exit(0))
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+}

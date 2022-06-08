@@ -1,3 +1,4 @@
+import { config } from "dotenv";
 import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import { BigNumber, ethers, utils } from "ethers";
@@ -17,7 +18,7 @@ export const formatDID = (address: string, chainID: number) => {
 
 export const EW_CHAIN_ID = 246;
 
-export const getRpc = (chainID: number) => {
+export const getRpcUrl = (chainID: number) => {
   switch (chainID) {
     case VOLTA_CHAIN_ID:
       return "https://volta-archive-rpc.energyweb.org";
@@ -74,7 +75,7 @@ const getBuildFileName = (buildPath: string) => {
   return buildPath.substring("../../build-info/".length);
 };
 
-export const _rpcReadContractSlot = async (
+export const rpcReadContractSlot = async (
   slotNumber: number,
   stakerAddress: string,
   provider: ethers.providers.JsonRpcProvider | ethers.providers.Web3Provider,
@@ -94,4 +95,9 @@ export const _rpcReadContractSlot = async (
     console.log("An error occurred :: ", err);
     return null;
   }
+};
+
+export const isEnvReady = () => {
+  config();
+  return process.env.STAKINGPOOL && process.env.SNAPSHOT_MIN_BALANCE && process.env.SNAPSHOT_BLOCKNUMBER;
 };
