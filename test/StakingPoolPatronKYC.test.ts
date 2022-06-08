@@ -406,7 +406,7 @@ describe("Staking Pool Patron KYC", function () {
     let lastBlock: Block;
     const chainID = 1337;
     it("Should create snapshots", async () => {
-      const { asPatron1, asPatron2, asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
       tx = await asPatron2.stake({ value: oneEWT.mul(5) });
       await tx.wait();
 
@@ -454,7 +454,7 @@ describe("Staking Pool Patron KYC", function () {
     });
 
     it("should not include a DID which stakes lower than the minimum", async () => {
-      const { asPatron2, asPatron3, provider, stakingPool, patron2 } = await loadFixture(defaultFixture);
+      const { asPatron2, asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
       const minStakeAmount = 5;
 
       tx = await asPatron3.stake({ value: oneEWT.mul(2) });
