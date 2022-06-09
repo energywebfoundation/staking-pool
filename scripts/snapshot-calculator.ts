@@ -115,6 +115,7 @@ export const takeSnapShot = async (
   blockNumber: number,
   minimumBalance: number,
   provider: providers.JsonRpcProvider,
+  credentialNamespace: string,
 ) => {
   const stakersList = await getStakers(blockNumber, contractAddress, provider);
   let snapshotContent = await calculateSnapshot(
@@ -141,7 +142,7 @@ export const takeSnapShot = async (
   const finalSnapshot = [...new Set(snapshotContent)];
 
   const snapshot = {
-    credentialNamespace: "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc",
+    credentialNamespace,
     credentials: finalSnapshot,
   };
   if (finalSnapshot.length !== 0) {
@@ -160,6 +161,7 @@ if (isEnvReady()) {
     Number(process.env.SNAPSHOT_BLOCKNUMBER),
     Number(process.env.SNAPSHOT_MIN_BALANCE),
     provider,
+    String(process.env.CREDENTIAL_NAME_SPACE),
   )
     .then(() => process.exit(0))
     .catch((error) => {

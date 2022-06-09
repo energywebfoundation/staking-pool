@@ -405,6 +405,7 @@ describe("Staking Pool Patron KYC", function () {
     let tx;
     let lastBlock: Block;
     const chainID = 1337;
+    let credentialNamespace: string;
     it("Should create snapshots", async () => {
       const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
       tx = await asPatron2.stake({ value: oneEWT.mul(5) });
@@ -419,7 +420,10 @@ describe("Staking Pool Patron KYC", function () {
       });
 
       //snapshot1
-      const snaphsot1FileName = String(await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider));
+      credentialNamespace = "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snaphsot1FileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider, credentialNamespace),
+      );
       const snapshot1 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1FileName), {
         encoding: "utf8",
       });
@@ -432,7 +436,10 @@ describe("Staking Pool Patron KYC", function () {
       lastBlock = await provider.getBlock("latest");
 
       //snapshot2
-      const snaphsot2FileName = String(await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider));
+      credentialNamespace = "snapshot2.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snaphsot2FileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider, credentialNamespace),
+      );
       const snapshot2 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot2FileName), {
         encoding: "utf8",
       });
@@ -443,14 +450,19 @@ describe("Staking Pool Patron KYC", function () {
       expect(snapshot2).to.equal(expectedSnapshot2);
 
       //snapshot with a prior blockNumber
-      const snaphsot1RetroFileName = String(
-        await takeSnapShot(stakingPool.address, chainID, lastBlock.number - 1, 1, provider),
+      credentialNamespace = "snapshot3.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snapshot1RetroFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number - 1, 1, provider, credentialNamespace),
       );
-      const snapshotRetro = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1RetroFileName), {
+      const snapshotRetro = readFileSync(resolve(__dirname, "../", "snapshots", snapshot1RetroFileName), {
         encoding: "utf8",
       });
 
-      expect(snapshotRetro).to.equal(expectedSnapshot1);
+      const expectedSnapshot3 = readFileSync(resolve(__dirname, "utils", "snapshot_3_test.json"), {
+        encoding: "utf8",
+      });
+
+      expect(snapshotRetro).to.equal(expectedSnapshot3);
     });
 
     it("should not include a staker who stakes the minimum after the snapshot", async () => {
@@ -464,8 +476,17 @@ describe("Staking Pool Patron KYC", function () {
       await tx.wait();
 
       lastBlock = await provider.getBlock("latest");
+      credentialNamespace = "snapshot4.roles.consortiapool.apps.energyweb.iam.ewc";
+
       let snapshotFileName = String(
-        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
       );
       const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
       const filteredSnapShot = readFileSync(resolve(__dirname, "utils", "filtered_snapshot_test.json"), {
@@ -479,7 +500,14 @@ describe("Staking Pool Patron KYC", function () {
 
       //But snapshot on block before restake should not include patron3
       snapshotFileName = String(
-        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
       );
       const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
         encoding: "utf8",
@@ -495,7 +523,15 @@ describe("Staking Pool Patron KYC", function () {
       await tx.wait();
 
       lastBlock = await provider.getBlock("latest");
-      const snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider);
+      credentialNamespace = "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snapshot = await takeSnapShot(
+        stakingPool.address,
+        chainID,
+        lastBlock.number,
+        minStakeAmount,
+        provider,
+        credentialNamespace,
+      );
       expect(snapshot).to.be.null;
     });
 
@@ -508,9 +544,17 @@ describe("Staking Pool Patron KYC", function () {
       await asPatron3.unstake(oneEWT.mul(49));
 
       lastBlock = await provider.getBlock("latest");
+      credentialNamespace = "snapshot5.roles.consortiapool.apps.energyweb.iam.ewc";
 
       let snapshotFileName = String(
-        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
       );
       const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
       const postWithdrawSnapShot = readFileSync(resolve(__dirname, "utils", "postWithdraw_snapshot_test.json"), {
@@ -521,7 +565,14 @@ describe("Staking Pool Patron KYC", function () {
       //Patron3 Restakes after snapshot
       await asPatron3.stake({ value: oneEWT.mul(60) });
       snapshotFileName = String(
-        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minStakeAmount, provider),
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
       );
       const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
         encoding: "utf8",
@@ -538,7 +589,14 @@ describe("Staking Pool Patron KYC", function () {
       await asPatron3.unstake(oneEWT.mul(49));
       lastBlock = await provider.getBlock("latest");
 
-      const _snapshot = await takeSnapShot(stakingPool.address, chainID, lastBlock.number, minBalance, provider);
+      const _snapshot = await takeSnapShot(
+        stakingPool.address,
+        chainID,
+        lastBlock.number,
+        minBalance,
+        provider,
+        credentialNamespace,
+      );
       expect(_snapshot).to.be.null;
     });
   });

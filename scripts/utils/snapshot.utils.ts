@@ -99,5 +99,10 @@ export const rpcReadContractSlot = async (
 
 export const isEnvReady = () => {
   config();
-  return process.env.STAKINGPOOL && process.env.SNAPSHOT_MIN_BALANCE && process.env.SNAPSHOT_BLOCKNUMBER;
+  return (
+    process.env.STAKINGPOOL &&
+    process.env.SNAPSHOT_MIN_BALANCE &&
+    process.env.SNAPSHOT_BLOCKNUMBER &&
+    process.env.CREDENTIAL_NAME_SPACE
+  );
 };
