@@ -18,9 +18,10 @@ const deployContract = async (contractName) => {
   const Contract = await ethers.getContractFactory(contractName);
 
   // const initiator = "0x7aB78e40666E18fB8bA9998f2A8201257e6890de";
-  const VOLTA_CLAIM_MANAGER_ADDRESS = "0x23b026631A6f265d17CFee8aa6ced1B244f3920C";
+  // const VOLTA_CLAIM_MANAGER_ADDRESS = "0x23b026631A6f265d17CFee8aa6ced1B244f3920C";
 
-  const initiator = "0x935b00BdF181C207D954E97Dbb1197E83366fd49"; //Gnosis Multisig Wallet
+  const initiator = Contract.signer.address;
+  const VOLTA_CLAIM_MANAGER_ADDRESS = "0xC3dD7ED75779b33F5Cfb709E0aB02b71fbFA3210";
 
   try {
     const deployedContract = await Contract.deploy(initiator, VOLTA_CLAIM_MANAGER_ADDRESS);
@@ -34,18 +35,14 @@ const deployContract = async (contractName) => {
   }
 };
 
-//current staking 2 contract --> 	Address: 0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A
 const initializeContract = async (_deployedContract) => {
-  const start = 1647630000; //18/03/2022 - 20:00:00
-  const end = 1671390000; //18/12/2022 - 20:00:0
-  const ratio = ethers.utils.parseUnits("0.00001125", 18);
+  const start = Math.floor(new Date().getTime() / 1000) + 1 * 60;
+  const end = start + 24 * 3600;
 
-  const hardCap = ethers.utils.parseUnits("7500000", "ether");
-  const contributionLimit = ethers.utils.parseUnits("3000", "ether");
-
-  // const patronRoles = [ethers.utils.namehash("email.roles.verification.apps.energyweb.iam.ewc")]; //on volta
-  const patronRoles = [ethers.utils.namehash("email.roles.verification.apps.energyweb.auth.ewc")]; // EWC
-
+  const ratio = ethers.utils.parseUnits("0.004", 18);
+  const hardCap = ethers.utils.parseUnits("10", "ether");
+  const contributionLimit = ethers.utils.parseUnits("0.5", "ether");
+  const patronRoles = [ethers.utils.namehash("email.roles.verification.apps.energyweb.iam.ewc")];
   const rewards = (await _deployedContract.compound(ratio, hardCap, start, end)).sub(hardCap);
 
   console.log(
