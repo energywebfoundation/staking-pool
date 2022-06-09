@@ -21,19 +21,18 @@ const STAKES_STORAGE_SLOT = getSlotNumber("StakingPoolPatronKYC", "stakes"); //s
 const nodeEmoji = require("node-emoji");
 
 const parseEvents = async (stakeLogs: Log[], blockNumber: number) => {
-  const stakers: string[] = [];
+  // const stakers: string[] = [];
+  const stakers = new Set<string>();
   await Promise.all(
     stakeLogs.map(async (currentLog) => {
       if (currentLog.blockNumber <= blockNumber) {
         //Removing the padding zeros
         const currentAddress = utils.hexStripZeros(currentLog.topics[1]);
-        if (!stakers.includes(currentAddress)) {
-          stakers.push(currentAddress);
-        }
+        stakers.add(currentAddress);
       }
     }),
   );
-  return stakers;
+  return [...stakers];
 };
 
 const getStakers = async (blockNumber: number, stakingPoolAddress: string, provider: JsonRpcProvider) => {
