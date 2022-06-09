@@ -15,8 +15,9 @@
   "scripts": {
     "prebuild": "rimraf dist ethers && hardhat clean",
     "build": "npm run compile && bili && copyfiles artifacts/contracts/**/*.json -u 1 dist",
-    "test": "hardhat test --show-stack-traces && rm -rf snapshots/*.json",
+    "test": "hardhat test --show-stack-traces && npm run clean",
     "compile": "hardhat compile",
+    "clean": "rm -rf snapshots/stakingSnapshot_*.json",
     "cuke": "hardhat compile && tsc && cucumber-js",
     "deploy:dev": "concurrently \"hardhat node\" \"hardhat run scripts/deploy.js\"",
     "deploy:volta": "hardhat run scripts/deploy.js --network volta",
