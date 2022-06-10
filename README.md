@@ -100,5 +100,3 @@ In order to build after a successful `clone`:
 
 * run following command
 > `npm deploy:volta`
-
-More information to come...

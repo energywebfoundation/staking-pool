@@ -1,0 +1,17 @@
+{
+ "credentialNamespace": "snapshot5.roles.consortiapool.apps.energyweb.iam.ewc",
+ "credentials": [
+  {
+   "did": "did:ethr:volta:0xd59ca627af68d29c547b91066297a7c469a7bf72",
+   "issuerFields": [
+    {
+     "stakeAmount": 42,
+     "minimumBalance": 15,
+     "snapshotBlock": 10,
+     "chainId": 1337,
+     "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
+    }
+   ]
+  }
+ ]
+}

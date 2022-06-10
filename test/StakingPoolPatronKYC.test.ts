@@ -1,7 +1,11 @@
 import { expect, use } from "chai";
+import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { StakingPool } from "../ethers";
 import { Wallet, utils, BigNumber } from "ethers";
+import { Block } from "@ethersproject/abstract-provider";
 import { claimManagerABI } from "./utils/claimManager_abi";
+import { takeSnapShot } from "../scripts/snapshot-calculator";
 import { deployMockContract } from "@ethereum-waffle/mock-contract";
 import { deployContract, loadFixture, MockProvider, solidity } from "ethereum-waffle";
 import StakingPoolContract from "../artifacts/contracts/StakingPoolPatronKYC.sol/StakingPoolPatronKYC.json";
@@ -33,7 +37,7 @@ describe("Staking Pool Patron KYC", function () {
   async function fixture(
     hardCap: BigNumber,
     start: number,
-    [owner, owner2, patron1, patron2]: Wallet[],
+    [owner, owner2, patron1, patron2, patron3]: Wallet[],
     provider: MockProvider,
     initializePool = true,
     travel = true,
@@ -60,6 +64,10 @@ describe("Staking Pool Patron KYC", function () {
           .withArgs(patron2.address, patronRoleDef, defaultRoleVersion)
           .returns(true);
 
+        await claimManagerMocked.mock.hasRole
+          .withArgs(patron3.address, patronRoleDef, defaultRoleVersion)
+          .returns(true);
+
         const tx = await asOwner.init(start, end, ratioInt, hardCap, contributionLimit, [patronRoleDef], {
           value: rewards,
         });
@@ -82,9 +90,11 @@ describe("Staking Pool Patron KYC", function () {
       stakingPool,
       patron1,
       patron2,
+      patron3,
       owner,
       asPatron1: stakingPool.connect(patron1),
       asPatron2: stakingPool.connect(patron2),
+      asPatron3: stakingPool.connect(patron3),
       asOwner: stakingPool.connect(owner),
       asOwner2: stakingPool.connect(owner2),
       provider,
@@ -388,6 +398,206 @@ describe("Staking Pool Patron KYC", function () {
 
       expect(deposit).to.be.equal(BigNumber.from(0));
       expect(compounded).to.be.equal(BigNumber.from(0));
+    });
+  });
+
+  describe("Snapshots", async () => {
+    let tx;
+    let lastBlock: Block;
+    const chainID = 1337;
+    let credentialNamespace: string;
+    it("Should create snapshots", async () => {
+      const { asPatron1, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
+      tx = await asPatron2.stake({ value: oneEWT.mul(5) });
+      await tx.wait();
+
+      tx = await asPatron1.stake({ value: oneEWT.mul(20) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+      const expectedSnapshot1 = readFileSync(resolve(__dirname, "utils", "snapshot_1_test.json"), {
+        encoding: "utf8",
+      });
+
+      //snapshot1
+      credentialNamespace = "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snaphsot1FileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider, credentialNamespace),
+      );
+      const snapshot1 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot1FileName), {
+        encoding: "utf8",
+      });
+
+      expect(snapshot1).to.equal(expectedSnapshot1);
+
+      tx = await asPatron2.stake({ value: oneEWT.mul(10) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+
+      //snapshot2
+      credentialNamespace = "snapshot2.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snaphsot2FileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number, 1, provider, credentialNamespace),
+      );
+      const snapshot2 = readFileSync(resolve(__dirname, "../", "snapshots", snaphsot2FileName), {
+        encoding: "utf8",
+      });
+
+      const expectedSnapshot2 = readFileSync(resolve(__dirname, "utils", "snapshot_2_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot2).to.equal(expectedSnapshot2);
+
+      //snapshot with a prior blockNumber
+      credentialNamespace = "snapshot3.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snapshot1RetroFileName = String(
+        await takeSnapShot(stakingPool.address, chainID, lastBlock.number - 1, 1, provider, credentialNamespace),
+      );
+      const snapshotRetro = readFileSync(resolve(__dirname, "../", "snapshots", snapshot1RetroFileName), {
+        encoding: "utf8",
+      });
+
+      const expectedSnapshot3 = readFileSync(resolve(__dirname, "utils", "snapshot_3_test.json"), {
+        encoding: "utf8",
+      });
+
+      expect(snapshotRetro).to.equal(expectedSnapshot3);
+    });
+
+    it("should not include a staker who stakes the minimum after the snapshot", async () => {
+      const { asPatron2, asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minStakeAmount = 5;
+
+      tx = await asPatron3.stake({ value: oneEWT.mul(2) });
+      await tx.wait();
+
+      tx = await asPatron2.stake({ value: oneEWT.mul(20) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+      credentialNamespace = "snapshot4.roles.consortiapool.apps.energyweb.iam.ewc";
+
+      let snapshotFileName = String(
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
+      );
+      const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
+      const filteredSnapShot = readFileSync(resolve(__dirname, "utils", "filtered_snapshot_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot).to.equal(filteredSnapShot);
+
+      //patron3 adds a new stake to meet snapshot minBalance
+      tx = await asPatron3.stake({ value: oneEWT.mul(10) });
+      await tx.wait();
+
+      //But snapshot on block before restake should not include patron3
+      snapshotFileName = String(
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
+      );
+      const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
+        encoding: "utf8",
+      });
+      expect(reStakeSnapshot).to.equal(filteredSnapShot);
+    });
+
+    it("should not create a snapshot if a staker stakes lower than the snapshot minimum", async () => {
+      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minStakeAmount = 5;
+
+      tx = await asPatron3.stake({ value: oneEWT.mul(2) });
+      await tx.wait();
+
+      lastBlock = await provider.getBlock("latest");
+      credentialNamespace = "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc";
+      const snapshot = await takeSnapShot(
+        stakingPool.address,
+        chainID,
+        lastBlock.number,
+        minStakeAmount,
+        provider,
+        credentialNamespace,
+      );
+      expect(snapshot).to.be.null;
+    });
+
+    it("should not include a staker who withdraws before the snapshot block and restakes after the snapshot", async () => {
+      const { asPatron3, asPatron2, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minStakeAmount = 15;
+
+      await asPatron3.stake({ value: oneEWT.mul(50) });
+      await asPatron2.stake({ value: oneEWT.mul(42) });
+      await asPatron3.unstake(oneEWT.mul(49));
+
+      lastBlock = await provider.getBlock("latest");
+      credentialNamespace = "snapshot5.roles.consortiapool.apps.energyweb.iam.ewc";
+
+      let snapshotFileName = String(
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
+      );
+      const snapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), { encoding: "utf8" });
+      const postWithdrawSnapShot = readFileSync(resolve(__dirname, "utils", "postWithdraw_snapshot_test.json"), {
+        encoding: "utf8",
+      });
+      expect(snapshot).to.equal(postWithdrawSnapShot);
+
+      //Patron3 Restakes after snapshot
+      await asPatron3.stake({ value: oneEWT.mul(60) });
+      snapshotFileName = String(
+        await takeSnapShot(
+          stakingPool.address,
+          chainID,
+          lastBlock.number,
+          minStakeAmount,
+          provider,
+          credentialNamespace,
+        ),
+      );
+      const reStakeSnapshot = readFileSync(resolve(__dirname, "../", "snapshots", snapshotFileName), {
+        encoding: "utf8",
+      });
+      //Snapshot on block before re-staking should not include DID of patron3
+      expect(reStakeSnapshot).to.equal(postWithdrawSnapShot);
+    });
+
+    it("should not create a snapshot if a staker withdraws before the snapshot block", async () => {
+      const { asPatron3, provider, stakingPool } = await loadFixture(defaultFixture);
+      const minBalance = 15;
+
+      await asPatron3.stake({ value: oneEWT.mul(50) });
+      await asPatron3.unstake(oneEWT.mul(49));
+      lastBlock = await provider.getBlock("latest");
+
+      const _snapshot = await takeSnapShot(
+        stakingPool.address,
+        chainID,
+        lastBlock.number,
+        minBalance,
+        provider,
+        credentialNamespace,
+      );
+      expect(_snapshot).to.be.null;
     });
   });
 
