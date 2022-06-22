@@ -11,18 +11,28 @@ To run the script, you can either:
 - `SNAPSHOT_MIN_BALANCE`: The minimal amount that one must have staked be taken included in the current snapshot.
 - `STAKINGPOOL`: The address of the `staking contract`.
 - `SNAPSHOT_BLOCKNUMBER`: The height of the block on which you want to get the snapshot.
+- `CREDENTIAL_NAME_SPACE`: The credential role name associated to the current snapshots claim
+- `CHAINID`: The chain identifer (246 for `EWC` and 73799 for `Volta`)
 
 #### Content of the .env file
 ```
 PRIV_KEY = <Wallet_private_key>
-SNAPSHOT_START_BLOCK = 17810000
-SNAPSHOT_END_BLOCK = 17816744
 SNAPSHOT_MIN_BALANCE = 1500
 SNAPSHOT_BLOCKNUMBER = 16934055
 STAKINGPOOL = "0x181A8b2a5AEb25941F6A79b4aE43dBb1968c417A"
+CREDENTIAL_NAME_SPACE = "snapshot1.roles.consortiapool.apps.energyweb.iam.ewc"
+CHAINID = 246
 ```
 
-To run the `snapshot-calculator` script from your terminal, type the following command :
+To run the `snapshot-calculator` script from your terminal:
+
+ 1 - Copy and update the `.env.example` file:
+
+```bash
+cp .env.example .env
+```
+
+ 2 -  type the following command :
 
 ```javascript
 npm run snapshots:calculate
