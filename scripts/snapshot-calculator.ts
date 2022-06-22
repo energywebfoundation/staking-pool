@@ -12,7 +12,6 @@ import {
   getRpcUrl,
   isEnvReady,
 } from "./utils/snapshot.utils";
-import { VOLTA_CHAIN_ID } from "@energyweb/iam-contracts";
 
 config();
 const failingCalculations = new Set<string>();
