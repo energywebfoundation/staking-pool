@@ -12,6 +12,7 @@ import {
   getRpcUrl,
   isEnvReady,
 } from "./utils/snapshot.utils";
+import { VOLTA_CHAIN_ID } from "@energyweb/iam-contracts";
 
 config();
 const failingCalculations = new Set<string>();
@@ -153,10 +154,11 @@ export const takeSnapShot = async (
 };
 
 if (isEnvReady()) {
-  const provider = new providers.JsonRpcProvider(getRpcUrl(EW_CHAIN_ID));
+  const chainId = Number(process.env.CHAINID);
+  const provider = new providers.JsonRpcProvider(getRpcUrl(chainId));
   takeSnapShot(
     String(process.env.STAKINGPOOL),
-    EW_CHAIN_ID,
+    chainId,
     Number(process.env.SNAPSHOT_BLOCKNUMBER),
     Number(process.env.SNAPSHOT_MIN_BALANCE),
     provider,

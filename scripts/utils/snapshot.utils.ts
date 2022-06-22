@@ -103,6 +103,7 @@ export const isEnvReady = () => {
     process.env.STAKINGPOOL &&
     process.env.SNAPSHOT_MIN_BALANCE &&
     process.env.SNAPSHOT_BLOCKNUMBER &&
+    process.env.CHAINID &&
     process.env.CREDENTIAL_NAME_SPACE
   );
 };
