@@ -4,14 +4,7 @@ import { writeFileSync } from "node:fs";
 import { Log, JsonRpcProvider } from "@ethersproject/providers";
 import { providers, utils } from "ethers";
 import { Snapshot } from "./types/snapshot.types";
-import {
-  EW_CHAIN_ID,
-  formatDID,
-  rpcReadContractSlot,
-  getSlotNumber,
-  getRpcUrl,
-  isEnvReady,
-} from "./utils/snapshot.utils";
+import { formatDID, rpcReadContractSlot, getSlotNumber, getRpcUrl, isEnvReady } from "./utils/snapshot.utils";
 
 config();
 const failingCalculations = new Set<string>();
@@ -129,7 +122,7 @@ export const takeSnapShot = async (
   while (failingCalculations.size != 0) {
     const failingSnapshot = await calculateSnapshot(
       [...failingCalculations],
-      EW_CHAIN_ID,
+      chainID,
       provider,
       blockNumber,
       minimumBalance,
