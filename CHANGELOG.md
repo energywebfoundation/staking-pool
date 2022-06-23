@@ -1,3 +1,10 @@
+# [1.0.0-rc.17](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.16...v1.0.0-rc.17) (2022-06-23)
+
+
+### Bug Fixes
+
+* snapshot file format ([4121b35](https://github.com/energywebfoundation/staking-pool/commit/4121b35fd02c2a928de65bf9284de4e547d854b9))
+
 # [1.0.0-rc.16](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.15...v1.0.0-rc.16) (2021-12-09)
 
 
