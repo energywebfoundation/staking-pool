@@ -3,15 +3,13 @@
  "credentials": [
   {
    "did": "did:ethr:volta:0xd59ca627af68d29c547b91066297a7c469a7bf72",
-   "issuerFields": [
-    {
-     "stakeAmount": 20,
-     "minimumBalance": 5,
-     "snapshotBlock": 9,
-     "chainId": 1337,
-     "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
-    }
-   ]
+   "issuerFields": {
+    "stakeAmount": 20,
+    "minimumBalance": 5,
+    "snapshotBlock": 9,
+    "chainId": 1337,
+    "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
+   }
   }
  ]
 }
