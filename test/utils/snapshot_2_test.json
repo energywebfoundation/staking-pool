@@ -3,27 +3,23 @@
  "credentials": [
   {
    "did": "did:ethr:volta:0xd59ca627af68d29c547b91066297a7c469a7bf72",
-   "issuerFields": [
-    {
-     "stakeAmount": 15,
-     "minimumBalance": 1,
-     "snapshotBlock": 10,
-     "chainId": 1337,
-     "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
-    }
-   ]
+   "issuerFields": {
+    "stakeAmount": 15,
+    "minimumBalance": 1,
+    "snapshotBlock": 10,
+    "chainId": 1337,
+    "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
+   }
   },
   {
    "did": "did:ethr:volta:0xd1d84f0e28d6fedf03c73151f98df95139700aa7",
-   "issuerFields": [
-    {
-     "stakeAmount": 20,
-     "minimumBalance": 1,
-     "snapshotBlock": 10,
-     "chainId": 1337,
-     "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
-    }
-   ]
+   "issuerFields": {
+    "stakeAmount": 20,
+    "minimumBalance": 1,
+    "snapshotBlock": 10,
+    "chainId": 1337,
+    "stakingPoolAddress": "0xA193E42526F1FEA8C99AF609dcEabf30C1c29fAA"
+   }
   }
  ]
 }

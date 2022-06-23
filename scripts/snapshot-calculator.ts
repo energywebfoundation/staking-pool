@@ -1,5 +1,4 @@
 import { config } from "dotenv";
-import { ethers } from "hardhat";
 import { writeFileSync } from "node:fs";
 import { Log, JsonRpcProvider } from "@ethersproject/providers";
 import { providers, utils } from "ethers";
@@ -54,7 +53,7 @@ const calculateSnapshot = async (
 
   await Promise.all(
     stakers.map(async (currentAddress) => {
-      let stakingAmount = null;
+      let stakingAmount: null | number = null;
       try {
         do {
           stakingAmount = await rpcReadContractSlot(
@@ -74,15 +73,13 @@ const calculateSnapshot = async (
         if (Number(stakingAmount) >= minBalance) {
           snapshots.push({
             did: formatDID(currentAddress, chainID),
-            issuerFields: [
-              {
-                stakeAmount: Number(stakingAmount),
-                minimumBalance: minBalance,
-                snapshotBlock: blockNumber,
-                chainId: chainID,
-                stakingPoolAddress: stakingContract as string,
-              },
-            ],
+            issuerFields: {
+              stakeAmount: Number(stakingAmount),
+              minimumBalance: minBalance,
+              snapshotBlock: blockNumber,
+              chainId: chainID,
+              stakingPoolAddress: stakingContract as string,
+            },
           });
           //We remove this log from failingCalculation array if it is present
           if (failingCalculations.has(currentAddress)) {
