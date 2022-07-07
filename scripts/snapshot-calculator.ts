@@ -22,7 +22,8 @@ const parseEvents = async (stakeLogs: Log[], blockNumber: number) => {
         const ethAddressSize = 40;
         const remainingSize = currentLog.topics[1].length - ethAddressSize;
         const currentAddress = "0x" + currentLog.topics[1].substring(remainingSize);
-        stakers.add(utils.getAddress(currentAddress));
+        utils.getAddress(currentAddress);
+        stakers.add(currentAddress);
       }
     }),
   );
