@@ -18,8 +18,10 @@ const parseEvents = async (stakeLogs: Log[], blockNumber: number) => {
   await Promise.all(
     stakeLogs.map(async (currentLog) => {
       if (currentLog.blockNumber <= blockNumber) {
-        //Removing the padding zeros
-        const currentAddress = utils.hexStripZeros(currentLog.topics[1]);
+        //Extracting the address from the topics logs
+        const ethAddressSize = 40;
+        const remainingSize = currentLog.topics[1].length - ethAddressSize;
+        const currentAddress = "0x" + currentLog.topics[1].substring(remainingSize);
         stakers.add(currentAddress);
       }
     }),
