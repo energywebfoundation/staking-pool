@@ -1,3 +1,10 @@
+# [1.0.0-rc.18](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.17...v1.0.0-rc.18) (2022-07-08)
+
+
+### Bug Fixes
+
+* **snapshot-calulator:** fixing address extraction ([#55](https://github.com/energywebfoundation/staking-pool/issues/55)) ([0401b57](https://github.com/energywebfoundation/staking-pool/commit/0401b573bafef53b6952d4b8736656e3e97eeda2))
+
 # [1.0.0-rc.17](https://github.com/energywebfoundation/staking-pool/compare/v1.0.0-rc.16...v1.0.0-rc.17) (2022-06-23)
 
 
